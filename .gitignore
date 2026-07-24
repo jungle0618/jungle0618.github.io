@@ -1,0 +1,77 @@
+# 環境變數（保護 API Keys）
+.env.local
+.env.*.local
+.env
+
+# Next.js
+.next/
+out/
+game-web.zip
+node_modules/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.iml
+
+# OS
+.DS_Store
+thumbs.db
+*.pem
+
+# Build & Deployment
+dist/
+build/
+.turbopack/
+
+# Vercel
+.vercel/
+.vercelignore
+
+# npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 系統文件
+Thumbs.db
+.env.production.local
+.env.test.local
+
+# IDE 設定
+.vscode/settings.json
+.vscode/extensions.json
+.idea/
+
+# 其他
+.cache/
+*.bak
+imoc-design/
+
+# 私人數值分析與營運資料（保留本機，不提交到 repository）
+docs/formal-card-values.md
+app/lib/workerTestConfig.js
+app/lib/testModeOptimalTeams.js
+app/lib/formalCardValueMetrics.js
+analysis/
+reports/private/
+data/private/
+worker-data/
+*.analysis.json
+*.balance.csv
+*.private.csv
+*.private.json
+*.credentials.json
+temp.json
+
+# Apps Script／部署工具的本機設定與密碼資料
+apps-script/.clasp.json
+apps-script/.env*
+.clasp.json
+
+.vercel
+.env*.local

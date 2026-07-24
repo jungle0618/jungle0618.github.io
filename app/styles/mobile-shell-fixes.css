@@ -1,0 +1,1174 @@
+/* Single source of truth for phone layouts. */
+
+.mobile-shell-tabs {
+  display: none;
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  body::before {
+    content: "請將手機轉成橫向";
+    position: fixed;
+    z-index: 20000;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    padding: 100px 24px 24px;
+    background: linear-gradient(145deg, #0f172a, #172554);
+    color: #fff;
+    font-size: 1.55rem;
+    font-weight: 950;
+    text-align: center;
+  }
+
+  body::after {
+    content: "↻";
+    position: fixed;
+    z-index: 20001;
+    top: calc(50% - 62px);
+    left: 50%;
+    color: #bfdbfe;
+    font-size: 3.5rem;
+    transform: translate(-50%, -50%) rotate(-35deg);
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+  :root,
+  html,
+  body {
+    width: 100%;
+    height: var(--app-visible-height, 100dvh);
+    min-height: var(--app-visible-height, 100dvh);
+    max-height: var(--app-visible-height, 100dvh);
+    overflow: hidden;
+  }
+
+  .page-root.page-root--game-shell {
+    --phone-rail-width: 112px;
+    --phone-card-width: clamp(100px, 14vw, 118px);
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    width: 100dvw;
+    height: var(--app-visible-height, 100dvh);
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  /* Right control rail */
+  .mobile-shell-tabs,
+  .page-root--game-shell > .bottom-action-bar,
+  .game-quick-fab-group {
+    position: fixed;
+    right: max(5px, env(safe-area-inset-right, 0px));
+    left: auto;
+    box-sizing: border-box;
+    width: 106px;
+    margin: 0;
+    padding: 4px;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 5px 18px rgba(15, 23, 42, .15);
+  }
+
+  .mobile-shell-tabs {
+    z-index: 920;
+    top: max(7px, env(safe-area-inset-top, 0px));
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .mobile-shell-tabs button,
+  .page-root--game-shell > .bottom-action-bar .save-button,
+  .game-quick-fab-group button {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 4px 5px;
+    border-radius: 7px;
+    font-size: .65rem;
+    font-weight: 900;
+    line-height: 1.1;
+    white-space: normal;
+  }
+
+  .mobile-shell-tabs button {
+    border: 0;
+    background: transparent;
+    color: #64748b;
+  }
+
+  .mobile-shell-tabs button.is-active {
+    background: #2563eb;
+    color: #fff;
+  }
+
+  .game-quick-fab-group {
+    z-index: 910;
+    top: max(76px, calc(env(safe-area-inset-top, 0px) + 72px));
+    bottom: max(70px, calc(env(safe-area-inset-bottom, 0px) + 64px));
+    display: grid;
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 2px;
+    max-width: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .page-root--game-shell > .bottom-action-bar {
+    z-index: 940;
+    top: auto;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(32px, auto);
+    align-content: end;
+    gap: 3px;
+    height: auto;
+    max-height: calc(var(--app-visible-height, 100dvh) - max(16px, env(safe-area-inset-bottom, 0px)));
+    overflow: visible;
+    transform: none;
+  }
+
+  .page-root--game-shell > .bottom-action-bar > * {
+    grid-column: auto !important;
+  }
+
+  .page-root--game-shell > .bottom-action-bar .save-button {
+    height: auto;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  /* Shared content bounds */
+  .page-root--game-shell > .game-shell-canvas {
+    position: absolute;
+    inset:
+      max(5px, env(safe-area-inset-top, 0px))
+      calc(var(--phone-rail-width) + env(safe-area-inset-right, 0px))
+      max(8px, env(safe-area-inset-bottom, 0px))
+      max(5px, env(safe-area-inset-left, 0px));
+    box-sizing: border-box;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .page-root--game-shell .game-shell-main-stack {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+  }
+
+  /* Team page: two physical, non-overlapping halves */
+  .mobile-shell-view--team > .header-card,
+  .mobile-shell-view--team > .encounter-panel {
+    display: none;
+  }
+
+  .mobile-shell-view--team .game-shell-main-stack,
+  .mobile-shell-view--team .game-shell-main-stack:has(.collection-panel) {
+    position: relative;
+    display: block;
+    overflow: hidden;
+  }
+
+  .mobile-shell-view--team .game-shell-team-wrap,
+  .mobile-shell-view--team .game-shell-breakout {
+    position: absolute;
+    right: 0;
+    left: 0;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .mobile-shell-view--team .game-shell-team-wrap {
+    top: 0;
+    height: calc(50% - 4px);
+  }
+
+  .mobile-shell-view--team .game-shell-breakout {
+    top: calc(50% + 4px);
+    bottom: 0;
+    height: auto;
+  }
+
+  .mobile-shell-view--team .team-panel,
+  .mobile-shell-view--team .collection-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 6px 8px;
+    contain: layout paint;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .mobile-shell-view--team .team-panel-heading,
+  .mobile-shell-view--team .collection-panel-heading {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-height: 30px;
+    gap: 4px;
+  }
+
+  .mobile-shell-view--team .panel-title {
+    margin: 0;
+    font-size: .82rem;
+  }
+
+  .mobile-shell-view--team .mobile-team-row-tabs,
+  .mobile-shell-view--team .team-configure-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .mobile-shell-view--team .mobile-team-row-tabs {
+    margin-left: auto;
+  }
+
+  .mobile-shell-view--team .mobile-team-row-tabs button,
+  .mobile-shell-view--team .team-auto-configure-button {
+    min-height: 27px;
+    padding: 3px 6px;
+    border: 1px solid #bfdbfe;
+    border-radius: 7px;
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: .65rem;
+    font-weight: 900;
+  }
+
+  .mobile-shell-view--team .mobile-team-row-tabs button.is-active {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #fff;
+  }
+
+  .mobile-shell-view--team .mobile-team-row-tabs small {
+    margin-left: 3px;
+    color: inherit;
+    font-size: .55rem;
+  }
+
+  .mobile-shell-view--team .team-row--mobile-hidden {
+    display: none;
+  }
+
+  .mobile-shell-view--team .team-row:not(.team-row--mobile-hidden) {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .mobile-shell-view--team .team-grid,
+  .mobile-shell-view--team .collection-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: var(--phone-card-width);
+    grid-template-columns: none;
+    align-items: stretch;
+    justify-content: start;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 0;
+    gap: 10px;
+    padding: 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .mobile-shell-view--team .team-grid {
+    flex: 1 1 0;
+    height: 100%;
+  }
+
+  .mobile-shell-view--team .collection-grid {
+    flex: 1 1 0;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .mobile-shell-view--team .team-slot,
+  .mobile-shell-view--team .collection-card {
+    box-sizing: border-box;
+    width: var(--phone-card-width);
+    min-width: var(--phone-card-width);
+    max-width: var(--phone-card-width);
+    height: 100%;
+    min-height: 0;
+    padding: 2px;
+    contain: layout paint;
+    overflow: hidden;
+    scroll-snap-align: start;
+  }
+
+  .mobile-shell-view--team .collection-card {
+    touch-action: pan-x;
+    height: auto;
+    align-self: start;
+  }
+
+  .mobile-shell-view--team .team-slot .game-card,
+  .mobile-shell-view--team .collection-card .game-card {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  /* 角色池卡片縮短；拖曳浮層也使用相同尺寸，避免離開角色池後放大。 */
+  .mobile-shell-view--team .collection-card .game-card,
+  .mobile-shell-view--team .pointer-drag-ghost .game-card {
+    height: clamp(78px, 20dvh, 104px);
+    min-height: 0;
+  }
+
+  .mobile-shell-view--team .pointer-drag-ghost .game-card {
+    width: var(--phone-card-width);
+    max-width: var(--phone-card-width);
+  }
+
+  .mobile-shell-view--team .pet-card-icon-wrap {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 30px;
+    height: auto;
+    padding: 2px;
+  }
+
+  .mobile-shell-view--team .pet-card-icon {
+    display: block;
+    width: clamp(36px, 10dvh, 58px);
+    height: clamp(36px, 10dvh, 58px);
+    margin: auto;
+  }
+
+  .mobile-shell-view--team .pet-card-stats {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 0;
+    padding: 2px;
+    gap: 7px;
+    font-size: .78rem;
+  }
+
+  .mobile-shell-view--team .pet-card-stats span {
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  .mobile-shell-view--team .pet-card-stats img {
+    width: 10px;
+    height: 10px;
+  }
+
+  .mobile-shell-view--team .game-card-name {
+    font-size: .68rem;
+  }
+
+  .mobile-shell-view--team .game-card-level {
+    font-size: .62rem;
+  }
+
+  .mobile-shell-view--team .team-row-heading,
+  .mobile-shell-view--team .panel-subtitle,
+  .mobile-shell-view--team .collection-tag-filter,
+  .mobile-shell-view--team .collection-toolbar,
+  .mobile-shell-view--team .collection-card-state,
+  .mobile-shell-view--team .game-card-tags,
+  .card-tooltip,
+  .card-tooltip--floating {
+    display: none !important;
+  }
+
+  /* Battle */
+  .mobile-shell-view--battle > .header-card,
+  .mobile-shell-view--battle > .encounter-panel {
+    display: none;
+  }
+
+  .mobile-shell-view--battle .game-shell-main-stack,
+  .mobile-shell-view--battle .game-shell-team-wrap,
+  .mobile-shell-view--battle .battle-section-panel {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .mobile-shell-view--battle .battle-section-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 4px;
+    box-sizing: border-box;
+    padding: 6px;
+  }
+
+  .mobile-shell-view--battle .battle-section-header {
+    min-height: 28px;
+    gap: 6px;
+  }
+
+  .mobile-shell-view--battle .battle-section-kicker {
+    display: none;
+  }
+
+  .mobile-shell-view--battle .battle-section-header .panel-title {
+    margin: 0;
+    font-size: .85rem;
+  }
+
+  .mobile-shell-view--battle .battle-result-pill {
+    min-height: 27px;
+    padding: 3px 7px;
+  }
+
+  .mobile-shell-view--battle .battle-result-pill strong,
+  .mobile-shell-view--battle .battle-result-pill span {
+    font-size: .68rem;
+  }
+
+  .mobile-shell-view--battle .battle-replay-strip {
+    /* 與準備階段的「組隊／遊戲首頁」控制列共用右側位置。 */
+    position: fixed;
+    z-index: 945;
+    top: max(7px, env(safe-area-inset-top, 0px));
+    right: max(5px, env(safe-area-inset-right, 0px));
+    left: auto;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    width: 106px;
+    min-height: 38px;
+    padding: 3px;
+    gap: 4px;
+    overflow: visible;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 5px 18px rgba(15, 23, 42, .15);
+  }
+
+  .mobile-shell-view--battle .battle-replay-strip-label {
+    display: none;
+  }
+
+  .mobile-shell-view--battle .battle-replay-picker-button {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-height: 32px;
+    padding: 4px 9px;
+    border: 1px solid #93c5fd;
+    border-radius: 7px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    cursor: pointer;
+    font-size: .7rem;
+    text-align: left;
+  }
+
+  .mobile-shell-view--battle .battle-replay-picker-button strong {
+    font-size: .76rem;
+  }
+
+  .mobile-shell-view--battle .battle-replay-picker-button small {
+    color: #64748b;
+    font-size: .58rem;
+  }
+
+  .mobile-shell-view--battle .battle-replay-groups {
+    position: absolute;
+    z-index: 80;
+    top: calc(100% + 4px);
+    right: 0;
+    left: 0;
+    display: none;
+    width: auto;
+    max-height: min(180px, 48dvh);
+    padding: 6px;
+    border: 1px solid #93c5fd;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .98);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, .22);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .mobile-shell-view--battle .battle-replay-groups--picker-open {
+    position: fixed;
+    top: 50%;
+    right: auto;
+    left: 50%;
+    display: grid;
+    box-sizing: border-box;
+    width: min(94vw, 680px);
+    max-width: calc(100vw - 24px);
+    max-height: none;
+    transform: translate(-50%, -50%);
+    gap: 5px;
+    overflow: visible;
+  }
+
+  .mobile-shell-view--battle .battle-replay-group {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    align-items: center;
+    width: 100%;
+    padding: 4px;
+    gap: 6px;
+  }
+
+  .mobile-shell-view--battle .battle-replay-group-title {
+    min-width: 0;
+  }
+
+  .mobile-shell-view--battle .battle-replay-group-title strong {
+    font-size: .62rem;
+  }
+
+  .mobile-shell-view--battle .battle-replay-group-full-label {
+    display: none;
+  }
+
+  .mobile-shell-view--battle .battle-replay-group-short-label {
+    display: block;
+  }
+
+  .mobile-shell-view--battle .battle-replay-group-title span {
+    display: none;
+  }
+
+  .mobile-shell-view--battle .battle-replay-level-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(38px, 1fr));
+    gap: 4px;
+    padding: 2px;
+    overflow: visible;
+    overflow-y: hidden;
+  }
+
+  .mobile-shell-view--battle .boss-level-replay-tab {
+    flex: 0 0 38px;
+    width: 38px;
+    min-width: 38px;
+    min-height: 34px;
+    padding: 3px 4px;
+    border-radius: 6px;
+    font-size: .62rem;
+  }
+
+  .mobile-shell-view--battle .battle-arena-stack {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) 54px;
+    gap: 4px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .mobile-shell-view--battle .battle-arena {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .mobile-shell-view--battle .battle-lane-full {
+    justify-content: space-around;
+    width: 100%;
+    min-width: 640px;
+    min-height: 0;
+    height: 100%;
+    gap: clamp(58px, 10vw, 96px);
+  }
+
+  .mobile-shell-view--battle .battle-team {
+    gap: 5px;
+  }
+
+  .mobile-shell-view--battle .battle-lineup-pet,
+  .mobile-shell-view--battle .battle-lineup-image,
+  .mobile-shell-view--battle .battle-lineup-portrait {
+    width: clamp(42px, 12dvh, 62px);
+  }
+
+  .mobile-shell-view--battle .battle-lineup-image,
+  .mobile-shell-view--battle .battle-lineup-portrait {
+    height: clamp(42px, 12dvh, 62px);
+  }
+
+  .mobile-shell-view--battle .battle-hp-bar {
+    width: clamp(40px, 11dvh, 58px);
+    height: 5px;
+    margin-top: 3px;
+  }
+
+  .mobile-shell-view--battle .battle-lineup-stats {
+    margin-top: 2px;
+    gap: 5px;
+    font-size: .7rem;
+  }
+
+  .mobile-shell-view--battle .battle-chat-log {
+    height: 54px;
+    margin: 0;
+    border-radius: 7px;
+  }
+
+  .mobile-shell-view--battle .battle-chat-log__title {
+    display: none;
+  }
+
+  .mobile-shell-view--battle .battle-chat-log__messages {
+    box-sizing: border-box;
+    min-height: 0;
+    max-height: none;
+    height: 100%;
+    padding: 4px 7px;
+    overflow-y: auto;
+  }
+
+  .mobile-shell-view--battle .battle-chat-log__message {
+    padding: 1px 0;
+    font-size: .68rem;
+    line-height: 1.25;
+  }
+
+  .mobile-shell-view--battle .battle-frame-indicator {
+    right: 6px;
+    bottom: 5px;
+    padding: 2px 5px;
+    font-size: .6rem;
+  }
+
+  .mobile-shell-view--battle .battle-timeline-controls {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    min-height: 36px;
+    margin: 0;
+    padding: 3px;
+    gap: 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  .mobile-shell-view--battle .battle-control-button,
+  .mobile-shell-view--battle .battle-timeline-controls__speed-select {
+    flex: 0 0 auto;
+    min-height: 30px;
+    padding: 3px 7px;
+    border-radius: 6px;
+    font-size: .62rem;
+  }
+
+  .mobile-shell-view--battle .battle-timeline-controls__speed {
+    flex: 0 0 auto;
+    gap: 3px;
+    font-size: .62rem;
+  }
+
+  .mobile-shell-view--battle .battle-timeline-controls__speed-label {
+    display: none;
+  }
+
+  /* Mobile dialogs */
+  .game-compendium-dialog:not(.game-compendium-dialog--worker),
+  .game-tutorial-dialog,
+  .multiplayer-info-dialog {
+    width: calc(100vw - 12px);
+    height: calc(var(--app-visible-height, 100dvh) - 12px);
+    max-height: none;
+    border-radius: 10px;
+  }
+
+  /* 手機圖鑑的篩選區不固定在頂端，捲動時讓角色內容取得完整高度。 */
+  .game-compendium-dialog .pet-compendium-filters {
+    position: static;
+    top: auto;
+    z-index: auto;
+    margin-bottom: 14px;
+  }
+
+  /* 教學視窗把高度留給正文；標題與翻頁控制保持精簡。 */
+  .game-tutorial-dialog-header {
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+  }
+
+  .game-tutorial-dialog-title {
+    min-width: 0;
+    overflow: hidden;
+    padding-right: 0;
+    font-size: 1rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .game-tutorial-close {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: .72rem;
+    line-height: 1.1;
+  }
+
+  .game-tutorial-body {
+    padding: 12px 14px 10px;
+    font-size: .84rem;
+    line-height: 1.5;
+  }
+
+  .game-tutorial-footer {
+    gap: 6px;
+    padding: 6px 10px;
+  }
+
+  .game-tutorial-footer-center {
+    font-size: .7rem;
+  }
+
+  .game-tutorial-paging-btn {
+    min-height: 28px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: .72rem;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 340px) {
+  .page-root.page-root--game-shell {
+    --phone-card-width: clamp(86px, 13vw, 104px);
+  }
+
+  .mobile-shell-tabs button,
+  .page-root--game-shell > .bottom-action-bar .save-button,
+  .game-quick-fab-group button {
+    min-height: 27px;
+    font-size: .58rem;
+  }
+
+  .game-quick-fab-group {
+    top: 66px;
+    bottom: 56px;
+  }
+
+  .page-root--game-shell > .bottom-action-bar {
+    grid-auto-rows: minmax(27px, auto);
+    max-height: calc(100dvh - 8px);
+    padding: 3px;
+    gap: 2px;
+  }
+}
+
+@media (max-width: 760px) {
+  .main-menu-page,
+  .mode-login-page,
+  .mode-dashboard-page:not(.mode-dashboard-page--worker) {
+    box-sizing: border-box;
+    width: 100%;
+    height: auto;
+    min-height: 100svh;
+    padding: 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    align-content: start;
+  }
+
+  .main-menu-card,
+  .mode-login-card {
+    width: min(100%, 560px);
+    box-sizing: border-box;
+    padding: 24px 18px;
+    border-radius: 18px;
+  }
+
+  .main-menu-page {
+    place-items: start center;
+    padding: max(18px, env(safe-area-inset-top, 0px)) 12px max(18px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .main-menu-card {
+    margin: clamp(18px, 8vh, 80px) 0 18px;
+  }
+
+  .main-menu-title {
+    font-size: clamp(2rem, 10vw, 2.8rem);
+  }
+
+  .main-menu-subtitle {
+    margin-top: 12px;
+    font-size: .9rem;
+    line-height: 1.55;
+  }
+
+  .main-menu-actions {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .main-menu-button {
+    min-height: 52px;
+    border-radius: 12px;
+    font-size: 1rem;
+  }
+
+  .mode-login-page {
+    place-items: start center;
+    padding: max(18px, env(safe-area-inset-top, 0px)) 12px max(18px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .mode-login-card {
+    margin: clamp(18px, 8vh, 80px) 0 18px;
+  }
+
+  .mode-login-card {
+    gap: 15px;
+  }
+
+  .mode-login-card h1 {
+    font-size: 1.4rem;
+  }
+
+  .mode-login-card input,
+  .mode-login-card select {
+    min-height: 50px;
+    box-sizing: border-box;
+    font-size: 1rem;
+  }
+
+  .mode-login-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+
+  .mode-login-actions .main-menu-button {
+    min-height: 50px;
+  }
+}
+
+/* 手機橫向的入口頁：寬度可能接近平板，但可視高度很矮，不能套桌面卡片比例。 */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+  .main-menu-page,
+  .mode-login-page {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    padding: 10px 12px;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .main-menu-page {
+    /* 右側快速功能列寬 106px，主卡片不再被它遮住。 */
+    padding-right: 124px;
+  }
+
+  .main-menu-card,
+  .mode-login-card {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 640px;
+    margin: 4px auto 12px;
+    padding: 16px 18px;
+    border-radius: 16px;
+  }
+
+  .main-menu-kicker {
+    margin-bottom: 3px;
+    font-size: .68rem;
+  }
+
+  .main-menu-title {
+    font-size: clamp(2rem, 7vw, 2.7rem);
+    line-height: 1;
+  }
+
+  .main-menu-subtitle {
+    margin-top: 8px;
+    font-size: .78rem;
+    line-height: 1.35;
+  }
+
+  .main-menu-actions {
+    gap: 6px;
+    margin-top: 13px;
+  }
+
+  .main-menu-button {
+    min-height: 40px;
+    padding: 5px 10px;
+    border-radius: 10px;
+    font-size: .88rem;
+  }
+
+  .mode-login-card {
+    gap: 10px;
+    max-width: 420px;
+  }
+
+  .mode-login-card .main-menu-kicker {
+    margin-bottom: 0;
+  }
+
+  .mode-login-card h1 {
+    font-size: 1.25rem;
+  }
+
+  .mode-login-card label {
+    gap: 4px;
+    font-size: .82rem;
+  }
+
+  .mode-login-card input,
+  .mode-login-card select {
+    min-height: 38px;
+    padding: 5px 9px;
+    font-size: .86rem;
+  }
+
+  .mode-login-actions {
+    gap: 6px;
+  }
+
+  .mode-login-actions .main-menu-button {
+    min-height: 40px;
+  }
+}
+
+/* Mobile game home: a single three-column landscape layout. */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+  .mobile-shell-view--home > .game-shell-canvas {
+    display: none;
+  }
+
+  .mobile-shell-view--home > .header-card,
+  .mobile-shell-view--home > .encounter-panel {
+    position: absolute;
+    top: max(8px, env(safe-area-inset-top, 0px));
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    height: auto;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .mobile-shell-view--home > .header-card {
+    left: max(8px, env(safe-area-inset-left, 0px));
+    width: 190px;
+    padding: 14px;
+    border: 1px solid #bfdbfe;
+    border-radius: 16px;
+    background: linear-gradient(160deg, #eff6ff 0%, #ffffff 72%);
+    box-shadow: 0 8px 24px rgba(30, 64, 175, .12);
+  }
+
+  .mobile-shell-view--home > .header-card .header-summary {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobile-shell-view--home > .header-card .header-summary-label {
+    display: block;
+    margin-bottom: 8px;
+    color: #2563eb;
+    font-size: .9rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+  }
+
+  .mobile-shell-view--home > .header-card .header-compact-heading {
+    color: #0f172a;
+    font-size: 1.5rem;
+    line-height: 1.15;
+  }
+
+  .mobile-shell-view--home > .header-card .header-score-card {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 11px;
+    border-radius: 10px;
+    font-size: .9rem;
+  }
+
+  .mobile-shell-view--home > .header-card .header-score-card strong {
+    font-size: 1.2rem;
+  }
+
+  .mobile-shell-view--home > .encounter-panel {
+    right: calc(122px + env(safe-area-inset-right, 0px));
+    left: 206px;
+    padding: 12px;
+    border: 1px solid #ddd6fe;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
+    box-shadow: 0 8px 24px rgba(109, 40, 217, .1);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .mobile-shell-view--home .encounter-panel-kicker {
+    display: none;
+  }
+
+  .mobile-shell-view--home .encounter-mobile-secondary,
+  .mobile-shell-view--home .encounter-score {
+    display: none;
+  }
+
+  .mobile-shell-view--home .encounter-challenge-list {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+  }
+
+  .mobile-shell-view--home .encounter-challenge {
+    min-height: 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  .mobile-shell-view--home .encounter-challenge-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .mobile-shell-view--home .encounter-challenge-head span {
+    color: #2563eb;
+    font-size: .82rem;
+    font-weight: 900;
+  }
+
+  .mobile-shell-view--home .encounter-challenge-head strong {
+    color: #0f172a;
+    font-size: .96rem;
+    text-align: right;
+  }
+
+  .mobile-shell-view--home .encounter-panel-description {
+    display: -webkit-box;
+    margin: 6px 0 0;
+    overflow: hidden;
+    color: #475569;
+    font-size: .76rem;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .encounter-details-backdrop {
+    padding: 12px;
+  }
+
+  .encounter-details-dialog {
+    width: min(760px, calc(100vw - 24px));
+    height: min(360px, calc(var(--app-visible-height, 100dvh) - 24px));
+    border-radius: 14px;
+  }
+
+  .encounter-details-header {
+    padding: 12px 14px;
+  }
+
+  .encounter-details-header h2 {
+    font-size: 1.05rem;
+  }
+
+  .encounter-details-header button {
+    padding: 6px 10px;
+    font-size: .78rem;
+  }
+
+  .encounter-details-lineup {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .mobile-shell-view--home .encounter-monster-list {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 9px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .mobile-shell-view--home .encounter-monster {
+    display: block;
+    flex: 0 0 112px;
+    width: 112px;
+    min-width: 112px;
+  }
+
+  .mobile-shell-view--home .encounter-monster-card.game-card {
+    width: 112px;
+    height: 128px;
+    min-height: 128px;
+    padding: 6px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+}

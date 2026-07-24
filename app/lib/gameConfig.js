@@ -1,0 +1,41 @@
+export const GAME_CONFIG = Object.freeze({
+  teamSize: 5,
+  drawCards: 7,
+  maxPetLevel: 10,
+  maxLevelGap: 3,
+  maxRound: 10,
+  battleTurnLimit: 35,
+  maxBossLevel: 30,
+  duoContributionSize: 3,
+  duoClearScore: 1.5,
+  oncePerGamePetNames: Object.freeze(["鯊魚", "變色龍"]),
+  // Demo 使用獨立的簡單敵方編成，不直接重播正式關卡機制。
+  demoUsesFormalEncounters: false,
+  roundChallengeSchedule: [
+    [{ kind: "single", multiplayerEncounterRound: 1, demoEncounterRound: 1 }],
+    [{ kind: "duo", multiplayerEncounterRound: 2, demoEncounterRound: 2 }],
+    [{ kind: "single", multiplayerEncounterRound: 3, demoEncounterRound: 3 }],
+    [{ kind: "duo", multiplayerEncounterRound: 4, demoEncounterRound: 4 }],
+    [{ kind: "single", multiplayerEncounterRound: 6, demoEncounterRound: 6 }, { kind: "duo", multiplayerEncounterRound: 8, demoEncounterRound: 8 }],
+    [{ kind: "single", multiplayerEncounterRound: 5, demoEncounterRound: 5 }],
+    [{ kind: "single", multiplayerEncounterRound: 7, demoEncounterRound: 7 }, { kind: "single", multiplayerEncounterRound: 9, demoEncounterRound: 9 }],
+    [{ kind: "duo", multiplayerEncounterRound: 11, demoEncounterRound: 11 }],
+    [{ kind: "single", multiplayerEncounterRound: 12, demoEncounterRound: 12 }, { kind: "single", multiplayerEncounterRound: 13, demoEncounterRound: 13 }],
+    [{ kind: "single", multiplayerEncounterRound: 10, demoEncounterRound: 10 }, { kind: "duo", multiplayerEncounterRound: 14, demoEncounterRound: 14 }],
+  ],
+});
+
+export const {
+  teamSize: TEAM_SIZE,
+  drawCards: DRAW_CARDS,
+  maxPetLevel: MAX_PET_LEVEL,
+  maxLevelGap: MAX_LEVEL_GAP,
+  maxRound: MAX_ROUND,
+  battleTurnLimit: BATTLE_TURN_LIMIT,
+  maxBossLevel: MAX_BOSS_LEVEL,
+  duoContributionSize: DUO_CONTRIBUTION_SIZE,
+  duoClearScore: DUO_CLEAR_SCORE,
+  oncePerGamePetNames: ONCE_PER_GAME_PET_NAMES,
+  demoUsesFormalEncounters: DEMO_USES_FORMAL_ENCOUNTERS,
+  roundChallengeSchedule: ROUND_CHALLENGE_SCHEDULE,
+} = GAME_CONFIG;

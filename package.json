@@ -1,0 +1,38 @@
+{
+    "dependencies": {
+        "next": "^16.2.3",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "react-markdown": "^10.1.0",
+        "remark-gfm": "^4.0.1"
+    },
+    "name": "imoc-2026-demo",
+    "version": "1.0.0",
+    "scripts": {
+        "config:sync": "node --no-warnings scripts/sync-apps-script-config.mjs",
+        "config:check": "node --no-warnings scripts/sync-apps-script-config.mjs --check",
+        "prebuild": "npm run config:check",
+        "pretest": "npm run config:check",
+        "dev": "next dev",
+        "build": "next build",
+        "pack:zip": "next build && rm -f game-web.zip && (cd out && zip -r ../game-web.zip .)",
+        "start": "npx serve out",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "balance:cards": "vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:cards:precise": "BALANCE_PRECISE=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:proposed-stage": "BALANCE_PROPOSED_STAGE=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:worker-hen": "BALANCE_WORKER_HEN=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:worker-split": "BALANCE_WORKER_SPLIT=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:tests": "BALANCE_TEST_ONLY=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:tune-hen": "BALANCE_HEN_TUNING=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:candidates": "BALANCE_CANDIDATES=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:team-sizes": "BALANCE_COMPARE_TEAM_SIZES=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:team-sizes:exact": "BALANCE_EXACT_TEAM_SIZES=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
+        "balance:select-stages": "node scripts/select-formal-stage-mix.mjs",
+        "worker-data:export": "node --loader ./scripts/extensionless-loader.mjs scripts/export-worker-test-data.mjs"
+    },
+    "devDependencies": {
+        "vitest": "^4.1.5"
+    }
+}
