@@ -23,6 +23,7 @@ const generated = [
   `const BATTLE_TURN_LIMIT = ${GAME_CONFIG.battleTurnLimit};`,
   `const MAX_BOSS_LEVEL = ${GAME_CONFIG.maxBossLevel};`,
   `const DRAW_CARDS = ${GAME_CONFIG.drawCards};`,
+  `const INITIAL_ROUND_POOL_NAMES = Object.freeze(${JSON.stringify(GAME_CONFIG.initialRoundPoolNames)});`,
   `const SINGLE_TEAM_SIZE = ${GAME_CONFIG.teamSize};`,
   `const DUO_CONTRIBUTION_SIZE = ${GAME_CONFIG.duoContributionSize};`,
   `const DUO_CLEAR_SCORE = ${GAME_CONFIG.duoClearScore};`,

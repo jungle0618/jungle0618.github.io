@@ -1,7 +1,7 @@
-const API_VERSION = "2026-07-24-worker-test-data-v6";
+const API_VERSION = "2026-07-25-initial-round-pool-v1";
 const SHEETS = Object.freeze({
   gameState: "GameState", teams: "Teams", roster: "Roster", lineups: "Lineups",
-  pairings: "Pairings", battles: "Battles", workerAuth: "WorkerAuth", workerTestData: "WorkerTestData",
+  pairings: "Pairings", battles: "Battles", workerAuth: "WorkerAuth", workerTestData: "WorkerTestData", encounterData: "EncounterData",
 });
 const SHEET_HEADERS = Object.freeze({
   GameState: ["round", "phase", "version", "updatedAt"],
@@ -12,6 +12,7 @@ const SHEET_HEADERS = Object.freeze({
   Battles: ["battleId", "round", "challengeId", "teamIds", "score", "result", "replayJson", "createdAt"],
   WorkerAuth: ["workerId", "passwordHash", "enabled"],
   WorkerTestData: ["dataKey", "dataJson", "updatedAt"],
+  EncounterData: ["dataKey", "dataJson", "updatedAt"],
 });
 const SESSION_SECONDS = 12 * 60 * 60;
 // 後端唯一權威：前端不保存隊伍數量或配對規則。
@@ -23,6 +24,7 @@ const MAX_ROUND = 10;
 const BATTLE_TURN_LIMIT = 35;
 const MAX_BOSS_LEVEL = 30;
 const DRAW_CARDS = 7;
+const INITIAL_ROUND_POOL_NAMES = Object.freeze(["狗","貓","蛇","跳蛛","犀牛","鯉魚王","大猩猩","雪貂","熊","兔子"]);
 const SINGLE_TEAM_SIZE = 5;
 const DUO_CONTRIBUTION_SIZE = 3;
 const DUO_CLEAR_SCORE = 1.5;
@@ -95,16 +97,22 @@ function dispatch_(action, token, payload) {
     case "loginTeam": return loginTeam_(payload);
     case "loginWorker": return loginWorker_(payload);
     case "loadSession": return loadSession_(token);
-    case "loadPlayerGame": return loadPlayerGame_(requireSession_(token, "team"));
-    case "loadBattleReplays": return loadBattleReplays_(payload, requireSession_(token, "team"));
+    case "loadPlayerGame": return loadPlayerGame_(requireSessionAny_(token), payload);
+    case "loadBattleReplays": return loadBattleReplays_(payload, requireSessionAny_(token));
     case "loadChallengeBattles": return loadChallengeBattles_(payload, requireSessionAny_(token));
-    case "saveLineup": return withWriteLock_(() => saveLineup_(requireSession_(token, "team").teamId, payload));
-    case "loadWorkerGame": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: false, includeBattles: false, includeWorkerTestData: false });
-    case "loadWorkerRoundData": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: false, includeWorkerTestData: false });
+    case "saveLineup": return withWriteLock_(() => {
+      const session = requireSessionAny_(token);
+      const teamId = session.role === "worker" ? String(payload.teamId || "") : String(session.teamId);
+      if (!teamId) throw apiError_("TEAM_REQUIRED", "缺少隊伍編號", 400);
+      return saveLineup_(teamId, payload);
+    });
+    case "loadWorkerGame": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: true, includeWorkerTestData: false });
+    case "loadWorkerRoundData": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: true, includeWorkerTestData: false });
     case "loadWorkerTestData": requireSession_(token, "worker"); return loadWorkerTestCatalog_();
     case "loadWorkerTeam": return loadWorkerTeam_(payload, requireSession_(token, "worker"));
     case "loadWorkerAnalysis": return loadWorkerAnalysis_(payload, requireSession_(token, "worker"));
     case "drawRosters": requireSession_(token, "worker"); return withWriteLock_(() => drawRosters_(payload));
+    case "setInitialRosters": requireSession_(token, "worker"); return withWriteLock_(() => setInitialRosters_(payload));
     case "updateRosterLevels": requireSession_(token, "worker"); return withWriteLock_(() => updateRosterLevels_(payload));
     case "saveWorkerLineup": requireSession_(token, "worker"); return withWriteLock_(() => saveLineup_(payload.teamId, payload));
     case "autoConfigureAllLineups": requireSession_(token, "worker"); return withWriteLock_(() => autoConfigureAllLineups_(payload));
@@ -293,10 +301,23 @@ function loadRawGameState_(options = {}) {
     createdAt: pairing.createdAt,
   }));
   const currentPairings = savedPairings.length ? savedPairings : roundPairings_(round, teams, "");
+  const battleHistory = battles.map((battle) => {
+    const copy = Object.assign({}, battle);
+    delete copy.replayJson;
+    delete copy._rowNumber;
+    return copy;
+  });
   return {
     round,
     phase: state.phase || "prepare",
     version: Number(state.version) || 1,
+    gameState: {
+      round,
+      phase: state.phase || "prepare",
+      version: Number(state.version) || 1,
+      updatedAt: state.updatedAt || "",
+    },
+    formalEncounters: loadFormalEncounters_(),
     teams: teams.map((team) => {
       const teamRoster = roster.filter((pet) => String(pet.teamId) === String(team.teamId));
       return {
@@ -314,14 +335,58 @@ function loadRawGameState_(options = {}) {
       };
     }),
     currentPairings,
-    ...(includeBattles ? { battleHistory: battles.map((battle) => {
-      const copy = Object.assign({}, battle);
-      delete copy.replayJson;
+    pairings: currentPairings,
+    roster: includeRosters ? roster.map((pet) => {
+      const copy = Object.assign({}, pet);
       delete copy._rowNumber;
       return copy;
-    }) } : {}),
+    }) : [],
+    lineups: includeRosters
+      ? lineups.filter((row) => Number(row.round) === round).map((row) => {
+        const copy = Object.assign({}, row);
+        delete copy._rowNumber;
+        return copy;
+      })
+      : [],
+    battles: includeBattles ? battleHistory : [],
+    ...(includeBattles ? { battleHistory } : {}),
     ...(includeWorkerTestData ? { workerTestData: loadWorkerTestData_() } : {}),
   };
+}
+
+function loadEncounterData_() {
+  const result = {};
+  table_(SHEETS.encounterData).forEach((row) => {
+    if (!row.dataKey || !row.dataJson) return;
+    try {
+      result[String(row.dataKey)] = JSON.parse(String(row.dataJson));
+    } catch (error) {
+      throw apiError_("INVALID_ENCOUNTER_DATA", `EncounterData 的 ${row.dataKey} JSON 格式錯誤`, 500);
+    }
+  });
+  return result;
+}
+
+function loadFormalEncounters_() {
+  const workerChallenges = loadWorkerTestData_().challenges || [];
+  if (Array.isArray(workerChallenges) && workerChallenges.length) {
+    const byId = new Map(workerChallenges.map((challenge) => [String(challenge.id || ""), challenge]));
+    const encounters = [];
+    ROUND_KINDS.forEach((kinds, roundIndex) => {
+      kinds.forEach((kind, index) => {
+        const challengeId = challengeId_(roundIndex + 1, index, kind);
+        const challenge = byId.get(challengeId);
+        if (!challenge || !challenge.encounter) {
+          throw apiError_("INVALID_WORKER_TEST_DATA", `WorkerTestData 缺少正式關卡 ${challengeId} 的 encounter`, 500);
+        }
+        encounters.push(challenge.encounter);
+      });
+    });
+    return encounters;
+  }
+  const encounters = loadEncounterData_().formalEncounters || [];
+  if (!Array.isArray(encounters)) throw apiError_("INVALID_ENCOUNTER_DATA", "formalEncounters 必須是陣列", 500);
+  return encounters;
 }
 
 /** 工人測試資料只從私人 Google Sheet 讀取；絕不放入公開玩家回應。 */
@@ -422,7 +487,12 @@ function levelDistribution_(roster) {
   }, {});
 }
 
-function loadPlayerGame_(session) {
+function loadPlayerGame_(session, payload) {
+  if (session.role === "worker") {
+    const requestedTeamId = String(payload && payload.teamId || "");
+    if (!requestedTeamId) return loadRawGameState_({ includeRosters: true, includeBattles: true, includeWorkerTestData: false });
+    return loadWorkerTeam_({ teamId: requestedTeamId }, session);
+  }
   const game = loadRawGameState_();
   const duoIds = roundKinds_(game.round).map((kind, index) => kind === "duo" ? challengeId_(game.round, index, kind) : null).filter(Boolean);
   const pairings = game.currentPairings;
@@ -431,8 +501,16 @@ function loadPlayerGame_(session) {
   const partner = game.teams.find((team) => String(team.teamId) === String(partnerId));
   const partnerLineups = (partner && partner.currentLineups || []).filter((row) => duoIds.indexOf(String(row.challengeId)) >= 0);
   const partnerNames = new Set(partnerLineups.map((row) => String(row.petName || "")).filter(Boolean));
+  const visibleRoster = (game.roster || []).filter((pet) => String(pet.teamId) === String(session.teamId));
+  const visibleLineups = (game.lineups || []).filter((row) => String(row.teamId) === String(session.teamId));
   return {
     round: game.round, phase: game.phase, version: game.version, viewerTeamId: session.teamId,
+    gameState: game.gameState,
+    formalEncounters: game.formalEncounters,
+    pairings: game.pairings,
+    roster: visibleRoster,
+    lineups: visibleLineups,
+    battles: game.battles,
     teams: game.teams.map((team) => ({
       teamId: team.teamId, teamName: team.teamName, score: team.score, rank: team.rank,
       levelDistribution: levelDistribution_(team.roster),
@@ -453,7 +531,7 @@ function loadPlayerGame_(session) {
 function decodeReplay_(encoded) {
   if (!String(encoded).startsWith("gzip:")) throw apiError_("INVALID_REPLAY", "戰鬥回放格式無法辨識", 500);
   const bytes = Utilities.base64Decode(String(encoded).slice(5));
-  return JSON.parse(Utilities.ungzip(Utilities.newBlob(bytes)).getDataAsString());
+  return JSON.parse(Utilities.ungzip(Utilities.newBlob(bytes, "application/gzip")).getDataAsString());
 }
 
 function loadBattleReplays_(payload, session) {
@@ -463,9 +541,6 @@ function loadBattleReplays_(payload, session) {
   return { replays: ids.map((id) => {
     const battle = byId.get(String(id));
     if (!battle) throw apiError_("BATTLE_NOT_FOUND", `找不到戰鬥紀錄：${id}`, 404);
-    if (session.role === "team" && !String(battle.teamIds || "").split(",").map((value) => value.trim()).includes(String(session.teamId))) {
-      throw apiError_("BATTLE_FORBIDDEN", "不能讀取其他隊伍的戰鬥回放", 403);
-    }
     return decodeReplay_(battle.replayJson);
   }) };
 }
@@ -544,14 +619,20 @@ function saveLineup_(teamId, payload) {
 }
 
 function drawRosters_(payload) {
+  const game = loadRawGameState_();
+  if (Number(game.round) === 1) throw apiError_("INITIAL_ROUND_FIXED_POOL", "第 1 回合使用固定初始角色池，不能抽卡", 400);
   const eligible = Array.isArray(payload.eligiblePetNames) ? [...new Set(payload.eligiblePetNames.map(String))] : [];
   const count = Math.max(1, Math.min(100, Number(payload.cardCount) || DRAW_CARDS));
   if (!eligible.length) throw apiError_("INVALID_DRAW_POOL", "抽卡角色池不可為空", 400);
-  const game = loadRawGameState_();
+  const teamIds = Array.isArray(payload.teamIds)
+    ? [...new Set(payload.teamIds.map(String))]
+    : game.teams.map((team) => String(team.teamId));
+  const selectedTeams = game.teams.filter((team) => teamIds.indexOf(String(team.teamId)) >= 0);
+  if (!selectedTeams.length) throw apiError_("TEAM_REQUIRED", "至少要指定一個有效隊伍", 400);
   const rosterSheet = sheet_(SHEETS.roster);
   const roster = table_(SHEETS.roster);
   const newRows = [];
-  game.teams.forEach((team) => {
+  selectedTeams.forEach((team) => {
     const ownedRows = roster.filter((pet) => String(pet.teamId) === String(team.teamId));
     const byName = new Map(ownedRows.map((pet) => [String(pet.petName), { row: pet, level: Number(pet.level) || 1 }]));
     for (let draw = 0; draw < count; draw += 1) {
@@ -579,7 +660,68 @@ function drawRosters_(payload) {
     });
   });
   appendRows_(SHEETS.roster, newRows);
-  return { round: game.round, cardCount: count, teams: game.teams.map((team) => ({ teamId: team.teamId, teamName: team.teamName })) };
+  return { round: game.round, cardCount: count, teams: selectedTeams.map((team) => ({ teamId: team.teamId, teamName: team.teamName })) };
+}
+
+function setInitialRosters_(payload) {
+  const game = loadRawGameState_();
+  const rosterSheet = sheet_(SHEETS.roster);
+  const roster = table_(SHEETS.roster);
+  const allPets = new Set(INITIAL_ROUND_POOL_NAMES);
+  const existingWrites = [];
+  const newRows = [];
+
+  game.teams.forEach((team) => {
+    const byName = new Map(roster.filter((pet) => String(pet.teamId) === String(team.teamId)).map((pet) => [String(pet.petName), pet]));
+    byName.forEach((pet, petName) => {
+      existingWrites.push({
+        rowNumber: pet._rowNumber,
+        values: [allPets.has(petName) ? 1 : 0, 0, (Number(pet.version) || 1) + 1],
+      });
+    });
+    INITIAL_ROUND_POOL_NAMES.forEach((petName) => {
+      if (!byName.has(petName)) newRows.push([String(team.teamId), petName, 1, 0, 1]);
+    });
+  });
+
+  existingWrites.sort((a, b) => a.rowNumber - b.rowNumber);
+  for (let index = 0; index < existingWrites.length;) {
+    const start = index;
+    let end = index + 1;
+    while (end < existingWrites.length && existingWrites[end].rowNumber === existingWrites[end - 1].rowNumber + 1) end += 1;
+    rosterSheet.getRange(existingWrites[start].rowNumber, 3, end - start, 3)
+      .setValues(existingWrites.slice(start, end).map((write) => write.values));
+    index = end;
+  }
+  appendRows_(SHEETS.roster, newRows);
+
+  if (payload.clearCurrentRoundLineups) {
+    const allLineups = table_(SHEETS.lineups);
+    const now = new Date().toISOString();
+    const rows = [];
+    roundKinds_(game.round).forEach((kind, index) => {
+      const challengeId = challengeId_(game.round, index, kind);
+      const slotCount = kind === "duo" ? DUO_CONTRIBUTION_SIZE : SINGLE_TEAM_SIZE;
+      game.teams.forEach((team) => {
+        const previous = allLineups.filter((row) =>
+          String(row.teamId) === String(team.teamId)
+          && Number(row.round) === game.round
+          && String(row.challengeId) === challengeId
+        );
+        const version = Math.max(0, ...previous.map((row) => Number(row.version) || 0)) + 1;
+        for (var slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+          rows.push([game.round, challengeId, String(team.teamId), slotIndex, "", version, now]);
+        }
+      });
+    });
+    appendRows_(SHEETS.lineups, rows);
+  }
+
+  return {
+    round: game.round,
+    teams: game.teams.length,
+    initialPoolSize: INITIAL_ROUND_POOL_NAMES.length,
+  };
 }
 
 function levelGap_(byName) {
@@ -888,6 +1030,20 @@ function importWorkerTestData(dataJson) {
   return `已匯入 ${rows.length} 組工人測試資料`;
 }
 
+/**
+ * dataJson 格式：{"formalEncounters":[]}
+ */
+function importFormalEncounterData(dataJson) {
+  const parsed = JSON.parse(String(dataJson || ""));
+  if (!Array.isArray(parsed.formalEncounters)) throw new Error("缺少 EncounterData 欄位：formalEncounters");
+  const sheet = sheet_(SHEETS.encounterData);
+  const existing = Math.max(0, sheet.getLastRow() - 1);
+  if (existing) sheet.getRange(2, 1, existing, sheet.getLastColumn()).clearContent();
+  const now = new Date().toISOString();
+  sheet.getRange(2, 1, 1, 3).setValues([["formalEncounters", JSON.stringify(parsed.formalEncounters), now]]);
+  return `已匯入 ${parsed.formalEncounters.length} 個正式關卡`;
+}
+
 /** 既有遊戲只新增 WorkerTestData，不清除其他工作表。 */
 function addWorkerTestDataSheet() {
   const spreadsheet = spreadsheet_();
@@ -898,4 +1054,13 @@ function addWorkerTestDataSheet() {
     sheet.setFrozenRows(1);
   }
   return "WorkerTestData 工作表已建立";
+}
+
+function addEncounterDataSheet() {
+  const spreadsheet = spreadsheet_();
+  const headers = SHEET_HEADERS.EncounterData;
+  const sheet = spreadsheet.getSheetByName(SHEETS.encounterData) || spreadsheet.insertSheet(SHEETS.encounterData);
+  sheet.clear();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  return "EncounterData 工作表已建立";
 }

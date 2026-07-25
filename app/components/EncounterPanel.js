@@ -64,7 +64,7 @@ function EncounterDetailsDialog({ row, onClose, onSelectMonster }) {
 
 function EncounterChallenge({ row, onOpen }) {
   const { challenge, monsters, score, bossLevel = 1, active = false } = row;
-  const encounter = challenge.encounter;
+  const encounter = challenge.encounter ?? { name: "敵方資料未載入", description: "尚未從後端取得正式關卡資料。" };
   return (
     <section
       className={`encounter-challenge${active ? " encounter-challenge--active" : ""}`}
@@ -103,7 +103,7 @@ export default function EncounterPanel({ encounter, monsters, score, bossLevel =
   }
 
   const fallbackRow = {
-    challenge: { kindLabel: "", encounter },
+    challenge: { kindLabel: "", encounter: encounter ?? { name: "敵方資料未載入", description: "尚未從後端取得正式關卡資料。" } },
     monsters,
     score,
     bossLevel,

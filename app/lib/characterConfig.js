@@ -115,31 +115,13 @@ export const ENEMY_DEFINITIONS = {
   tutorial_guard: { name: "斑馬", image: "/pet_images/enemies/zebra.png", atk: 20, hp: 200 },
 
   // 正式關自訂角色改用正式關未出場的既有敵方動物與圖片；母雞／雞蛋保留在關卡內定義。
-  worker_living_enemy_power: { name: "猴子", image: "/pet_images/enemies/monkey.png", atk: 6, hp: 30, livingEnemyAtkBase: 0, special: { livingEnemyAtkPerUnit: 6, livingEnemyHpPerUnit: 30 } },
-  worker_living_enemy_guard: { name: "水獺", image: "/pet_images/enemies/otter.png", atk: 5, hp: 40, special: {} },
-  worker_survival_splitter: { name: "羚羊", image: "/pet_images/enemies/antelope.png", atk: 20, hp: 20, special: { deathSplitMaxGenerations: 3 } },
+  worker_living_enemy_power: { name: "奶龍", image: "/pet_images/enemies/milk_dragon.png", atk: 6, hp: 30, livingEnemyAtkBase: 0, special: { livingEnemyAtkPerUnit: 6, livingEnemyHpPerUnit: 30 } },
+  worker_living_enemy_guard: { name: "小蜜蜂", image: "/pet_images/enemies/little_bee.png", atk: 5, hp: 40, special: {} },
+  worker_survival_splitter: { name: "芒果", image: "/pet_images/enemies/mango.png", atk: 20, hp: 20, special: { deathSplitMaxGenerations: 3 } },
 };
 
 validateSpecialDefinitions(PET_DEFINITIONS, "我方角色");
 validateSpecialDefinitions(ENEMY_DEFINITIONS, "敵方角色");
-
-/** 每個正式關卡使用獨立陣容；陣列順序為後排到前排。 */
-export const ENEMY_ENCOUNTERS = [
-  { name: "獅王基準", description: "沒有特殊效果的單體首領，檢查隊伍基本攻防。", enemyIds: ["forest_tyrant"] },
-  { name: "泉庭誘餌", description: "低生命誘餌保護治療核心，自癒前排拖長戰線。", enemyIds: ["life_chanter", "high_priest", "sleepy_healer"] },
-  { name: "薄甲連牙", description: "全隊薄甲掩護前排三連擊，讓穿透與多段承傷各有價值。", enemyIds: ["bombard_pulser", "twin_serpent"] },
-  { name: "白鐵倒數", description: "厚甲穿透前排拖延時間，後排在第十回合引爆全場。", enemyIds: ["forest_deer", "iron_fortress"] },
-  { name: "爆羽火線", description: "開場傷害接上死亡爆破，逼迫隊伍處理傷害時序。", enemyIds: ["bombard_opener", "bombard_martyr", "swarm_boar"] },
-  { name: "竹林風眼", description: "範圍攻擊藏在減傷守衛身後，必須突破保護或直取後排。", enemyIds: ["storm_archer", "bamboo_guard"] },
-  { name: "深海替身", description: "後排刺客與最低生命追擊者，獅子以高攻擊力施壓。", enemyIds: ["endless_colossus", "royal_assassin", "forest_tyrant"] },
-  { name: "封攻長城", description: "電鰻封鎖前排攻擊，陸龜以護甲拖延戰鬥。", enemyIds: ["attack_sealer", "shell_guard"] },
-  { name: "霧沼三震", description: "開戰三段全體傷害後進入奇數回合閃避節奏。", enemyIds: ["shadow_assassin"] },
-  { name: "存活威壓", description: "猴子與水獺依序排列；猴子攻擊力與生命上限為 6 × 我方目前存活角色數，水獺為 5/40 白板。", enemyIds: ["worker_living_enemy_power", "worker_living_enemy_guard"] },
-  { name: "誘餌獵場", description: "後排治療核心、高攻中衛與低生命前衛組成多線壓力；跳蛛、獨角仙與蜜獾各有發揮空間，但一般輸出也能通關。", enemyIds: ["sleepy_healer", "swarm_piranha", "endless_colossus"] },
-  { name: "孵蛋母雞", description: "母雞持續在前方孵化雞蛋，考驗清場速度與前線壓力控制。", enemies: [{ id: "worker_summoning_hen", name: "母雞", image: "/pet_images/enemies/hen.png", atk: 12, hp: 40, special: { roundFrontSummonEvery: 2, roundFrontSummonName: "雞蛋", roundFrontSummonImage: "/pet_images/enemies/egg.png", roundFrontSummonAtk: 4, roundFrontSummonHp: 3 } }] },
-  { name: "死亡分裂", description: "羚羊死亡時分裂成兩個較弱個體，考驗範圍傷害與持續作戰。", enemyIds: ["worker_survival_splitter"] },
-  { name: "駝羽風暴", description: "開場轟炸、死亡爆破與範圍普攻形成三種不同傷害波段。", enemyIds: ["storm_archer", "bombard_opener", "bombard_martyr"] },
-];
 
 /** Demo 專用關卡；以白板或單純面板敵人為主，避免重播正式關卡的特殊機制。 */
 export const DEMO_ENEMY_ENCOUNTERS = [
@@ -147,7 +129,7 @@ export const DEMO_ENEMY_ENCOUNTERS = [
   { name: "鸚鵡爆竹", description: "鸚鵡倒下時留下爆炸餘波，綿羊則替整隊披上薄甲；集中火力也要計算代價。", enemyIds: ["bombard_martyr", "bombard_pulser"] },
   { name: "浣熊撿漏", description: "浣熊追擊最低生命角色，老虎守在前方等待收尾，治療順序比純輸出更重要。", enemyIds: ["swarm_raccoon", "glass_cannon_king", "swarm_raccoon"] },
   { name: "水獺溪谷", description: "兩側食人魚壓迫前線，水獺持續把生命拉回來；先斷治療還是先清魚潮各有解法。", enemyIds: ["swarm_piranha", "rage_hp_aide", "swarm_piranha", "swarm_squirrel"] },
-  { name: "五路動物園", description: "五個方向同時施壓：魚潮、浣熊、赤狐、野豬與鸚鵡，考驗隊伍能否兼顧後排與死亡連鎖。", enemyIds: ["swarm_piranha", "swarm_raccoon", "swarm_fox", "swarm_boar", "bombard_martyr"] },
+  { name: "五路動物園", description: "五個方向同時施壓：魚潮、浣熊、赤狐、豬與鸚鵡，考驗隊伍能否兼顧後排與死亡連鎖。", enemyIds: ["swarm_piranha", "swarm_raccoon", "swarm_fox", "swarm_boar", "bombard_martyr"] },
   { name: "豹影雙擊", description: "花豹逐回合變強並連續攻擊，兩隻食人魚迫使隊伍在速攻與拖延間做選擇。", enemyIds: ["swarm_piranha", "rage_champion", "swarm_piranha"] },
   { name: "狐狸穿線", description: "赤狐直取後排，前方松鼠把增益接力傳遞；前後排都不能完全放著不管。", enemyIds: ["swarm_fox", "swarm_squirrel"] },
   { name: "海象收費站", description: "海象反射普通攻擊，浣熊則持續削弱最低生命角色；每一下攻擊都要先看回彈風險。", enemyIds: ["swarm_raccoon", "retribution_guard", "swarm_raccoon", "swarm_squirrel"] },

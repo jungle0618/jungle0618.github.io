@@ -1,5 +1,6 @@
 import { getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
 import { buildChallengeEncounterTeam } from "../../lib/encounterLogic";
+import { DUO_CLEAR_SCORE } from "../../lib/gameConfig";
 import { buildDuoLineup, resolveDuoPairings } from "../../lib/multiplayerLogic";
 import { hydrateMultiplayerRoster, hydrateSavedLineup } from "./multiplayerAdapter";
 import { resolveOfficialRound } from "./workerBattleResolver";
@@ -69,7 +70,7 @@ export function buildOfficialBattleJobs(game) {
 export function calculateOfficialRound(game) {
   const result = resolveOfficialRound(buildOfficialBattleJobs(game), (battle, job) => {
     const cleared = battle.rightRemaining === 0 && !battle.timedOut;
-    return { total: cleared ? 1 : 0, cleared, bossLevel: job.bossLevel };
+    return { total: cleared ? (job.kind === "duo" ? DUO_CLEAR_SCORE : 1) : 0, cleared, bossLevel: job.bossLevel };
   });
   return { ...result, version: game.version };
 }

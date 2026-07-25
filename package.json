@@ -30,6 +30,8 @@
         "balance:team-sizes": "BALANCE_COMPARE_TEAM_SIZES=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
         "balance:team-sizes:exact": "BALANCE_EXACT_TEAM_SIZES=1 vitest run --config vitest.balance.config.mjs --reporter=verbose",
         "balance:select-stages": "node scripts/select-formal-stage-mix.mjs",
+        "formal-encounters:export": "node scripts/export-formal-encounter-data.mjs",
+        "formal-stage-json:export": "node --loader ./scripts/extensionless-loader.mjs scripts/export-reordered-formal-stage-json.mjs",
         "worker-data:export": "node --loader ./scripts/extensionless-loader.mjs scripts/export-worker-test-data.mjs"
     },
     "devDependencies": {

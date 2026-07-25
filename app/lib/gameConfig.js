@@ -1,6 +1,7 @@
 export const GAME_CONFIG = Object.freeze({
   teamSize: 5,
   drawCards: 7,
+  initialRoundPoolNames: Object.freeze(["狗", "貓", "蛇", "跳蛛", "犀牛", "鯉魚王", "大猩猩", "雪貂", "熊", "兔子"]),
   maxPetLevel: 10,
   maxLevelGap: 3,
   maxRound: 10,
@@ -28,6 +29,7 @@ export const GAME_CONFIG = Object.freeze({
 export const {
   teamSize: TEAM_SIZE,
   drawCards: DRAW_CARDS,
+  initialRoundPoolNames: INITIAL_ROUND_POOL_NAMES,
   maxPetLevel: MAX_PET_LEVEL,
   maxLevelGap: MAX_LEVEL_GAP,
   maxRound: MAX_ROUND,

@@ -1,5 +1,5 @@
 import { PET_DEFINITION_ORDER } from "./characterConfig";
-import { DRAW_CARDS, MAX_LEVEL_GAP, MAX_PET_LEVEL } from "./gameConfig";
+import { DRAW_CARDS, INITIAL_ROUND_POOL_NAMES, MAX_LEVEL_GAP, MAX_PET_LEVEL } from "./gameConfig";
 import { buildNewPet, getPetCompendiumList } from "./petCatalog";
 
 function mulberry32(seed) {
@@ -23,6 +23,10 @@ function sortCollection(collection) {
 
 export function canDrawPetAtRound(pet, round) {
   return Number(round) >= (Number(pet?.drawFromRound) || 1);
+}
+
+export function buildInitialRoundCollection() {
+  return INITIAL_ROUND_POOL_NAMES.map((name) => buildNewPet({ name }, 1));
 }
 
 /** 單人與多人共用的可重現抽卡規則；傳入不同 salt 可讓各小隊分別抽卡。 */

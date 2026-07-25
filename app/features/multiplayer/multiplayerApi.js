@@ -37,6 +37,17 @@ async function request(fetchImpl, action, payload = {}) {
   return body.data ?? {};
 }
 
+async function requestInChunks(fetchImpl, action, ids, chunkSize = 20, payloadKey = "battleIds", responseKey = "replays") {
+  const chunks = [];
+  for (let index = 0; index < ids.length; index += chunkSize) chunks.push(ids.slice(index, index + chunkSize));
+  const results = [];
+  for (const chunk of chunks) {
+    const body = await request(fetchImpl, action, { [payloadKey]: chunk });
+    results.push(...(body?.[responseKey] ?? []));
+  }
+  return results;
+}
+
 async function gzipBase64(value) {
   if (typeof CompressionStream === "undefined") return null;
   const stream = new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream("gzip"));
@@ -68,7 +79,7 @@ export function createMultiplayerApi(fetchImpl = fetch) {
     loadSession() { return request(fetchImpl, "loadSession"); },
     loadPlayerGame() { return request(fetchImpl, "loadPlayerGame"); },
     loadBattleReplay(battleId) { return request(fetchImpl, "loadBattleReplays", { battleIds: [battleId] }).then((body) => body.replays[0]); },
-    loadBattleReplays(battleIds) { return request(fetchImpl, "loadBattleReplays", { battleIds }).then((body) => body.replays); },
+    loadBattleReplays(battleIds) { return requestInChunks(fetchImpl, "loadBattleReplays", battleIds); },
     loadChallengeBattles(payload) { return request(fetchImpl, "loadChallengeBattles", payload); },
     saveLineup(payload) { return request(fetchImpl, "saveLineup", payload); },
     loadWorkerGame() { return request(fetchImpl, "loadWorkerGame"); },
@@ -77,6 +88,7 @@ export function createMultiplayerApi(fetchImpl = fetch) {
     loadWorkerTeam(teamId) { return request(fetchImpl, "loadWorkerTeam", { teamId }); },
     loadWorkerAnalysis(challengeId) { return request(fetchImpl, "loadWorkerAnalysis", { challengeId }); },
     drawRosters(payload) { return request(fetchImpl, "drawRosters", payload); },
+    setInitialRosters(payload) { return request(fetchImpl, "setInitialRosters", payload); },
     async saveOfficialRound(payload) {
       const battles = await Promise.all(payload.battles.map(async (battle) => ({
         battleId: battle.battleId,

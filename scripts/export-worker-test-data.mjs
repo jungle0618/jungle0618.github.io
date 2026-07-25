@@ -1,9 +1,12 @@
 import { buildNewPet, getPetCompendiumList } from "../app/lib/petCatalog.js";
-import { getChallengeLabel, getMultiplayerRoundChallenges } from "../app/lib/challengeConfig.js";
+import { getChallengeLabel, getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../app/lib/challengeConfig.js";
 import { selectTeamByLevel } from "../app/lib/lineupLogic.js";
 import { WORKER_ONLY_TEST_CHALLENGES } from "../app/lib/workerTestConfig.js";
 import { getPrecomputedOptimalTestTeams } from "../app/lib/testModeOptimalTeams.js";
 import { FORMAL_CARD_VALUE_METRICS } from "../app/lib/formalCardValueMetrics.js";
+import { FORMAL_ENCOUNTER_SEED } from "./formalEncounterSeed.mjs";
+
+setFormalEncounterCatalog(FORMAL_ENCOUNTER_SEED);
 
 const scheduled = Array.from({ length: 10 }, (_, index) => getMultiplayerRoundChallenges(index + 1)
   .map((challenge) => ({

@@ -33,7 +33,7 @@ export default function EnemyScheduleDialog({ title, description, maxRound, curr
             <section className="worker-enemy-round" key={round}>
               <h3>第 {round} 回合</h3>
               {challenges.map((challenge) => {
-                const enemies = buildChallengeEncounterTeam(challenge, 1);
+                const enemies = buildChallengeEncounterTeam(challenge, 1).reverse();
                 return (
                   <article className="worker-enemy-challenge" key={challenge.id}>
                     <div className="worker-enemy-challenge__heading">

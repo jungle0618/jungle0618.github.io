@@ -5,12 +5,13 @@ import { createBattleReplay, runBattle } from "../../lib/battleService";
 import {
   advanceDeploymentStates,
   applyDrawsToCollection,
+  buildInitialRoundCollection,
   drawPetCards,
 } from "./soloProgression";
 import { compactTeamToRight } from "../../lib/lineupLogic";
 import { buildChallengeEncounterTeam, buildRoundScore, buildSoloSummary, calculateSoloScore } from "../../lib/soloLogic";
 import { getChallengeLabel, getRoundChallenges } from "../../lib/soloConfig";
-import { DRAW_CARDS, DUO_CLEAR_SCORE } from "../../lib/gameConfig";
+import { DUO_CLEAR_SCORE } from "../../lib/gameConfig";
 
 function makeEmptyTeams(challenges) {
   return challenges.map((challenge) => Array(challenge.teamSize).fill(null));
@@ -169,17 +170,15 @@ export default function useSoloGameFlow({
   const continueToNextRound = useCallback(() => {
     if (!tutorialComplete) {
       const firstRoundChallenges = getRoundChallenges(1);
-      const draws = drawPetCards(1, DRAW_CARDS, 1, gameSeed);
-      const drawnCollection = applyDrawsToCollection([], draws);
       setTutorialComplete(true);
       setRound(1);
       setBossLevel(1);
-      setCollection(drawnCollection);
+      setCollection(buildInitialRoundCollection());
       setTeams(makeEmptyTeams(firstRoundChallenges));
       setBattleReplay(null);
       setBattleReplays([]);
       setGamePhase("prepare");
-      setStatusSuccess("教學關完成，已抽取正式第 1 回合角色池，請配置關卡隊伍");
+      setStatusSuccess("教學關完成，正式第 1 回合改用固定 10 張角色池，請配置關卡隊伍");
       return;
     }
 

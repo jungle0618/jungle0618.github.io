@@ -5,9 +5,12 @@ import { simulateBattle } from "../app/lib/battleLogic";
 import { buildChallengeEncounterTeam } from "../app/lib/encounterLogic";
 import { MAX_BOSS_LEVEL } from "../app/lib/gameConfig";
 import { buildNewPet, getPetCompendiumList, getPetQualityLabel } from "../app/lib/petCatalog";
-import { GAME_ENCOUNTERS, getChallengeLabel, getMultiplayerRoundChallenges } from "../app/lib/challengeConfig";
+import { GAME_ENCOUNTERS, getChallengeLabel, getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../app/lib/challengeConfig";
 import { CANDIDATE_ENEMY_ENCOUNTERS } from "../app/lib/candidateEncounterConfig";
 import { WORKER_ONLY_TEST_CHALLENGES } from "../app/lib/workerTestConfig";
+import { FORMAL_ENCOUNTER_SEED } from "./formalEncounterSeed.mjs";
+
+setFormalEncounterCatalog(FORMAL_ENCOUNTER_SEED);
 
 const CANDIDATE_MODE = process.env.BALANCE_CANDIDATES === "1";
 const TEAM_SIZE_COMPARISON_MODE = process.env.BALANCE_COMPARE_TEAM_SIZES === "1";

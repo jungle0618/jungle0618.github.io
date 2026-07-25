@@ -3,14 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createMultiplayerApi } from "./multiplayerApi";
 import ModeLogin from "./ModeLogin";
-import MultiplayerOverview from "./MultiplayerOverview";
+import MultiplayerOverview, { historyChallengeLabel } from "./MultiplayerOverview";
 import MultiplayerBusyOverlay from "./MultiplayerBusyOverlay";
 import PetCompendiumLauncher from "../../components/PetCompendiumLauncher";
+import BattleSection from "../../components/BattleSection";
 import { calculateOfficialRound, getOfficialLineupVersions } from "./officialRound";
 import { hydrateMultiplayerRoster, serializeLineup } from "./multiplayerAdapter";
-import { getChallengeLabel, getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
+import { getChallengeLabel, getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../../lib/challengeConfig";
 import { ITEM_ICONS } from "../../lib/assetConfig";
-import { DRAW_CARDS, MAX_PET_LEVEL, MAX_ROUND } from "../../lib/gameConfig";
+import { DRAW_CARDS, INITIAL_ROUND_POOL_NAMES, MAX_PET_LEVEL, MAX_ROUND } from "../../lib/gameConfig";
 import { formatDisplayName, getPetCompendiumList } from "../../lib/petCatalog";
 import { configureTeamsFromCollection } from "../../lib/lineupLogic";
 import { canDrawPetAtRound } from "../../lib/cardDrawLogic";
@@ -187,6 +188,9 @@ export default function WorkerMode({ onBack }) {
   const [selectedTeamDetails, setSelectedTeamDetails] = useState(null);
   const [workerTestData, setWorkerTestData] = useState(null);
   const [testModeOpen, setTestModeOpen] = useState(false);
+  const [battleReplay, setBattleReplay] = useState(null);
+  const [battleReplays, setBattleReplays] = useState([]);
+  const [bossLevel, setBossLevel] = useState(1);
   const cardProps = useMemo(() => ({ formatDisplayName, itemIcons: ITEM_ICONS, StatIcon, showPersistentProgress: true }), []);
   // 摘要資料刻意不含 roster；點選隊伍後必須等 loadWorkerTeam 完整資料回來。
   const selectedTeam = selectedTeamId ? selectedTeamDetails : null;
@@ -197,7 +201,11 @@ export default function WorkerMode({ onBack }) {
     return () => window.clearTimeout(timeoutId);
   }, [status]);
 
-  const loadGame = useCallback(async () => setGame(await api.loadWorkerGame()), [api]);
+  const loadGame = useCallback(async () => {
+    const nextGame = await api.loadWorkerGame();
+    setFormalEncounterCatalog(nextGame.formalEncounters ?? []);
+    setGame(nextGame);
+  }, [api]);
   useEffect(() => {
     let cancelled = false;
     api.loadSession().then(async (current) => {
@@ -272,6 +280,10 @@ export default function WorkerMode({ onBack }) {
   }
 
   async function drawRosters() {
+    if (game.round === 1) {
+      setError("第 1 回合不抽卡；請改用固定初始 10 張按鈕");
+      return;
+    }
     if (!window.confirm(`確定要讓每個小隊各抽 ${DRAW_CARDS} 張卡片嗎？`)) return;
     setBusy(true); setBusyAction("draw"); setError(null);
     try {
@@ -283,6 +295,44 @@ export default function WorkerMode({ onBack }) {
       });
       await loadGame();
       setStatus(`第 ${result.round} 回合自動抽卡完成：${result.teams.length} 個小隊各抽 ${result.cardCount} 張`);
+    } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
+  }
+
+  async function drawSelectedTeamRoster(teamId) {
+    if (game.round === 1) {
+      setError("第 1 回合不抽卡；請改用固定初始 10 張規則");
+      return;
+    }
+    if (!window.confirm(`確定要讓第 ${teamId} 小隊自動抽 ${DRAW_CARDS} 張卡片嗎？`)) return;
+    setBusy(true); setBusyAction("draw-one"); setError(null); setStatus(null);
+    try {
+      const result = await api.drawRosters({
+        cardCount: DRAW_CARDS,
+        teamIds: [String(teamId)],
+        eligiblePetNames: getPetCompendiumList()
+          .filter((pet) => pet.tier < 4 && canDrawPetAtRound(pet, game.round))
+          .map((pet) => pet.name),
+      });
+      await loadGame();
+      if (selectedTeamId === String(teamId)) {
+        const refreshed = await api.loadWorkerTeam(teamId);
+        setSelectedTeamDetails(refreshed.team);
+      }
+      setStatus(`第 ${result.round} 回合已替第 ${teamId} 小隊自動抽 ${result.cardCount} 張卡片`);
+    } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
+  }
+
+  async function setInitialRostersForAllTeams() {
+    if (!window.confirm(`確定要把所有小隊角色池改成固定初始 ${INITIAL_ROUND_POOL_NAMES.length} 張嗎？這會清空本回合已設定的陣容。`)) return;
+    setBusy(true); setBusyAction("initial-rosters"); setError(null); setStatus(null);
+    try {
+      const result = await api.setInitialRosters({ clearCurrentRoundLineups: true });
+      await loadGame();
+      if (selectedTeamId) {
+        const refreshed = await api.loadWorkerTeam(selectedTeamId);
+        setSelectedTeamDetails(refreshed.team);
+      }
+      setStatus(`已將 ${result.teams} 個小隊重設為固定初始 ${result.initialPoolSize} 張角色池，並清空第 ${result.round} 回合陣容`);
     } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
   }
 
@@ -309,6 +359,7 @@ export default function WorkerMode({ onBack }) {
     setBusy(true); setBusyAction("auto-lineups"); setError(null); setStatus(null);
     try {
       const roundGame = await api.loadWorkerRoundData();
+      setFormalEncounterCatalog(roundGame.formalEncounters ?? []);
       const roundChallenges = getMultiplayerRoundChallenges(roundGame.round).map((challenge) => ({
         ...challenge,
         teamSize: challenge.kind === "duo" ? 3 : challenge.teamSize,
@@ -332,6 +383,7 @@ export default function WorkerMode({ onBack }) {
     setBusy(true); setBusyAction("resolve"); setError(null); setStatus("正在前端計算所有正式戰鬥…");
     try {
       const currentGame = await api.loadWorkerRoundData();
+      setFormalEncounterCatalog(currentGame.formalEncounters ?? []);
       setGame(currentGame);
       const result = calculateOfficialRound(currentGame);
       setStatus(`已完成 ${result.battles.length} 場戰鬥，正在寫入 Google Sheet…`);
@@ -367,6 +419,39 @@ export default function WorkerMode({ onBack }) {
     finally { setBusy(false); setBusyAction(null); }
   }
 
+  async function openHistory(battles, historyGroup) {
+    setBusy(true); setBusyAction("history"); setError(null);
+    try {
+      const sortedBattles = [...battles]
+        .filter((battle) => battle && battle.battleId)
+        .sort((a, b) => Number(a.bossLevel ?? String(a.battleId).match(/lv(\d+)$/)?.[1]) - Number(b.bossLevel ?? String(b.battleId).match(/lv(\d+)$/)?.[1]));
+      if (!sortedBattles.length) throw new Error("這筆戰鬥紀錄缺少可讀取的 battleId");
+      const rawReplays = await api.loadBattleReplays(sortedBattles.map((battle) => battle.battleId));
+      const challenge = getMultiplayerRoundChallenges(historyGroup.round).find((item) => item.id === historyGroup.challengeId);
+      const roundTotal = battles.reduce((total, battle) => total + (Number(battle.score) || 0), 0);
+      const replayChallenge = challenge ? {
+        ...challenge,
+        kindLabel: getChallengeLabel(challenge),
+        label: `${getChallengeLabel(challenge)}｜${challenge.encounter.name}`,
+      } : null;
+      const replays = rawReplays.map((item) => ({
+        ...item,
+        challenge: replayChallenge ?? item.challenge,
+        score: { ...item.score, roundTotal },
+      }));
+      const replay = replays[0] ?? null;
+      setBattleReplays(replays);
+      setBattleReplay(replay);
+      setBossLevel(replay?.bossLevel ?? 1);
+      setOverviewOpen(false);
+      setStatus(`正在播放${historyChallengeLabel(historyGroup.round, historyGroup.challengeId)}正式戰鬥`);
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setBusy(false); setBusyAction(null);
+    }
+  }
+
   if (!session) return <ModeLogin role="worker" onSubmit={login} onBack={onBack} error={error} busy={busy} />;
   if (testModeOpen) {
     return (
@@ -390,7 +475,8 @@ export default function WorkerMode({ onBack }) {
           <button onClick={openTestMode} disabled={busy}>測試模式</button>
           </div>
           <div className="worker-action-group worker-action-group--game" aria-label="回合操作">
-            <button className={busyAction === "draw" ? "is-pending" : ""} onClick={drawRosters} disabled={busy || !game || game.phase === "finished"}>{busyAction === "draw" ? "抽卡中…" : `自動抽卡（每隊 ${DRAW_CARDS} 張）`}</button>
+            <button className={busyAction === "initial-rosters" ? "is-pending" : ""} onClick={setInitialRostersForAllTeams} disabled={busy || !game || game.phase === "finished"}>{busyAction === "initial-rosters" ? "設定中…" : `全部隊伍設為初始 ${INITIAL_ROUND_POOL_NAMES.length} 張`}</button>
+            <button className={busyAction === "draw" ? "is-pending" : ""} onClick={drawRosters} disabled={busy || !game || game.phase === "finished" || game.round === 1}>{busyAction === "draw" ? "抽卡中…" : `自動抽卡（第 2 回合後，每隊 ${DRAW_CARDS} 張）`}</button>
             <button className={busyAction === "auto-lineups" ? "is-pending" : ""} onClick={autoConfigureAllLineups} disabled={busy || !game || game.phase === "finished"}>{busyAction === "auto-lineups" ? "組隊中…" : "所有隊伍一鍵組隊"}</button>
             <button className={busyAction === "resolve" ? "is-pending" : ""} onClick={resolveRound} disabled={busy || !game || game.phase === "finished"}>{busyAction === "resolve" ? "結算中…" : "正式結算並進入下一回合"}</button>
           </div>
@@ -430,6 +516,9 @@ export default function WorkerMode({ onBack }) {
               <section className="worker-team-detail__section">
                 <h3>調整角色等級</h3>
                 <p>Lv.0 代表未解鎖；每張角色卡下方會顯示本次增加或減少的等級，按確認後才送出。</p>
+                <button type="button" className="worker-lineup-save" onClick={() => drawSelectedTeamRoster(selectedTeam.teamId)} disabled={busy || !game || game.phase === "finished" || game.round === 1}>
+                  {busyAction === "draw-one" ? "抽卡中…" : `這隊自動抽 ${DRAW_CARDS} 張`}
+                </button>
                 <WorkerRosterEditor team={selectedTeam} busy={busy} onSaveLevels={saveRosterLevels} />
               </section>
               <section className="worker-team-detail__section">
@@ -440,7 +529,7 @@ export default function WorkerMode({ onBack }) {
           </section> : <section className="worker-team-dialog" role="dialog" aria-modal="true" aria-labelledby="worker-team-dialog-title"><p className="mode-loading">正在載入隊伍完整資料…</p></section>}
         </div>
       ) : null}
-      {overviewOpen && game ? <MultiplayerOverview game={game} session={session} cardProps={cardProps} onClose={() => setOverviewOpen(false)} onLogout={logout} onBack={onBack} /> : null}
+      {overviewOpen && game ? <MultiplayerOverview game={game} session={session} cardProps={cardProps} onClose={() => setOverviewOpen(false)} onLogout={logout} onBack={onBack} onSelectHistory={openHistory} /> : null}
       {enemyScheduleOpen ? (
         <EnemyScheduleDialog
           title="正式版關卡敵方陣容"
@@ -450,6 +539,36 @@ export default function WorkerMode({ onBack }) {
           getRoundChallenges={getMultiplayerRoundChallenges}
           onClose={() => setEnemyScheduleOpen(false)}
         />
+      ) : null}
+      {battleReplay ? (
+        <div className="game-tutorial-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !busy) {
+            setBattleReplay(null);
+            setBattleReplays([]);
+            setBossLevel(1);
+          }
+        }}>
+          <section className="game-compendium-dialog multiplayer-info-dialog" role="dialog" aria-modal="true" aria-labelledby="worker-history-title">
+            <div className="game-settings-dialog-header">
+              <h2 id="worker-history-title" className="game-settings-dialog-title">過去戰鬥回放</h2>
+              <button type="button" className="game-tutorial-close" onClick={() => {
+                setBattleReplay(null);
+                setBattleReplays([]);
+                setBossLevel(1);
+              }}>關閉</button>
+            </div>
+            <div className="pet-compendium-body multiplayer-info-body">
+              <BattleSection
+                battleReplay={battleReplay}
+                battleReplays={battleReplays}
+                onSelectReplay={(replay) => {
+                  setBattleReplay(replay);
+                  setBossLevel(replay?.bossLevel ?? 1);
+                }}
+              />
+            </div>
+          </section>
+        </div>
       ) : null}
       <MultiplayerBusyOverlay active={busy} label={busyAction === "resolve" ? "正在結算並讀取下一回合…" : busyAction === "reset" ? "正在重置並重新讀取資料…" : "正在處理多人資料…"} />
     </main>

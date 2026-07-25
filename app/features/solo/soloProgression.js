@@ -1,6 +1,6 @@
 import { buildNewPet } from "../../lib/petCatalog";
 
-export { applyDrawsToCollection, drawPetCards } from "../../lib/cardDrawLogic";
+export { applyDrawsToCollection, buildInitialRoundCollection, drawPetCards } from "../../lib/cardDrawLogic";
 
 /** 每個大遊戲回合只結算一次出戰狀態。 */
 export function advanceDeploymentStates(collection, previousTeam) {

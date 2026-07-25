@@ -9,6 +9,7 @@ import {
   getPetQualityLabel,
   getPetSpecialEffectText,
 } from "../lib/petCatalog";
+import { MAX_BOSS_LEVEL } from "../lib/gameConfig";
 import { ENEMY_DEFINITIONS, ENEMY_LEVEL_GROWTH, getCharacterTags, getEnemyDefinition, getEnemyLevelMultiplier, getLevelMultiplier, scaleSpecialForLevel } from "../lib/characterConfig";
 import { filterCompendiumEntries, findPlayerCompendiumEntry } from "../lib/compendiumVisibility";
 
@@ -51,10 +52,10 @@ function PetCompendiumDetail({ entry, onBack, backButtonRef }) {
         </div>
       </div>
       <p className="pet-compendium-detail-lead">
-        我方等級為 Lv.1～Lv.10，敵方等級為 Lv.1～Lv.20；我方攻防與固定加值效果每級乘 1.2，敵方每級乘 1.1。以下為各等級的基礎攻防與戰場效果。
+        {`我方等級為 Lv.1～Lv.10，敵方等級為 Lv.1～Lv.${MAX_BOSS_LEVEL}；我方攻防與固定加值效果每級乘 1.2，敵方每級乘 1.1。以下為各等級的基礎攻防與戰場效果。`}
       </p>
       <div className="pet-compendium-level-grid">
-        {Array.from({ length: entry.isEnemy ? 20 : 10 }, (_, index) => index + 1).map((lv) => {
+        {Array.from({ length: entry.isEnemy ? MAX_BOSS_LEVEL : 10 }, (_, index) => index + 1).map((lv) => {
           const multiplier = entry.isEnemy ? getEnemyLevelMultiplier(lv) : getLevelMultiplier(lv);
           const stats = entry.isEnemy
             ? { atk: Math.max(1, Math.floor(entry.atk * multiplier)), hp: Math.max(1, Math.floor(entry.hp * multiplier)) }
@@ -227,7 +228,7 @@ export default function PetCompendiumLauncher({ selectedPet = null, onSelectedPe
                       : "圖鑑收錄非傳奇我方角色；敵方與傳奇角色資料需從遊戲中出現的角色卡片查看。"}
                     <strong> 點選卡片</strong>
                     {includeEnemies
-                      ? "可查看我方 Lv.1～Lv.10、敵方 Lv.1～Lv.20 面板與效果數值。"
+                      ? `可查看我方 Lv.1～Lv.10、敵方 Lv.1～Lv.${MAX_BOSS_LEVEL} 面板與效果數值。`
                       : "可查看我方 Lv.1～Lv.10 面板與效果數值。"}
                   </p>
                   <div className="pet-compendium-filters" aria-label="圖鑑篩選">

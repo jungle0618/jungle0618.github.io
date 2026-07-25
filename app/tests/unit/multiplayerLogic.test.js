@@ -15,7 +15,11 @@ import {
 } from "../../features/multiplayer/multiplayerAdapter";
 import { resolveOfficialRound } from "../../features/multiplayer/workerBattleResolver";
 import { buildOfficialBattleJobs, getOfficialLineupVersions } from "../../features/multiplayer/officialRound";
-import { MAX_BOSS_LEVEL } from "../../lib/gameConfig";
+import { DUO_CLEAR_SCORE, MAX_BOSS_LEVEL } from "../../lib/gameConfig";
+import { setFormalEncounterCatalog } from "../../lib/challengeConfig";
+import { FORMAL_ENCOUNTER_SEED } from "../../../scripts/formalEncounterSeed.mjs";
+
+setFormalEncounterCatalog(FORMAL_ENCOUNTER_SEED);
 
 describe("多人模式基礎規則", () => {
   it("隊名留白時仍顯示小隊編號", () => {
@@ -150,5 +154,24 @@ describe("多人模式基礎規則", () => {
         ],
       }],
     })).toEqual([{ teamId: "1", challengeId: "2-1-duo", version: 3 }]);
+  });
+
+  it("雙人正式關每通過一級算 1.5 分", () => {
+    const result = resolveOfficialRound([{
+      battleId: "duo-score",
+      encounterId: "boss-1",
+      encounterName: "測試關",
+      challengeId: "duo",
+      kind: "duo",
+      round: 2,
+      bossLevel: 1,
+      teamIds: ["team-1", "team-8"],
+      leftTeam: [{ name: "貓", atk: 35, hp: 10, special: {} }, null, null, null, null, null],
+      rightTeam: [{ name: "敵人", atk: 0, hp: 1, special: {} }],
+    }], (battle, job) => {
+      const cleared = battle.rightRemaining === 0 && !battle.timedOut;
+      return { total: cleared ? (job.kind === "duo" ? DUO_CLEAR_SCORE : 1) : 0, cleared, bossLevel: job.bossLevel };
+    });
+    expect(result.battles[0].score.total).toBe(DUO_CLEAR_SCORE);
   });
 });

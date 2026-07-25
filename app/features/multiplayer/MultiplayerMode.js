@@ -7,7 +7,7 @@ import StatIcon from "../../components/StatIcon";
 import usePointerDrag from "../../hooks/usePointerDrag";
 import useTeamSelectionActions from "../../hooks/useTeamSelectionActions";
 import { createBattleReplay, runBattle } from "../../lib/battleService";
-import { DUO_CHALLENGE_TEAM_SIZE, getChallengeLabel, getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
+import { DUO_CHALLENGE_TEAM_SIZE, getChallengeLabel, getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../../lib/challengeConfig";
 import { buildChallengeEncounterTeam } from "../../lib/encounterLogic";
 import { ITEM_ICONS } from "../../lib/assetConfig";
 import { DUO_CLEAR_SCORE, MAX_ROUND } from "../../lib/gameConfig";
@@ -101,6 +101,7 @@ export default function MultiplayerMode({ onBack }) {
 
   const loadGame = useCallback(async () => {
     const nextGame = await api.loadPlayerGame();
+    setFormalEncounterCatalog(nextGame.formalEncounters ?? []);
     setGame(nextGame);
     setGamePhase("prepare");
     setBattleReplay(null);
@@ -241,7 +242,9 @@ export default function MultiplayerMode({ onBack }) {
     setBusy(true); setBusyAction("history"); setError(null);
     try {
       const sortedBattles = [...battles]
+        .filter((battle) => battle && battle.battleId)
         .sort((a, b) => Number(a.bossLevel ?? String(a.battleId).match(/lv(\d+)$/)?.[1]) - Number(b.bossLevel ?? String(b.battleId).match(/lv(\d+)$/)?.[1]));
+      if (!sortedBattles.length) throw new Error("這筆戰鬥紀錄缺少可讀取的 battleId");
       const rawReplays = await api.loadBattleReplays(sortedBattles.map((battle) => battle.battleId));
       const challenge = getMultiplayerRoundChallenges(historyGroup.round).find((item) => item.id === historyGroup.challengeId);
       const roundTotal = battles.reduce((total, battle) => total + (Number(battle.score) || 0), 0);

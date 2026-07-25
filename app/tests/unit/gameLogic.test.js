@@ -14,18 +14,22 @@ import {
 import {
   advanceDeploymentStates,
   applyDrawsToCollection,
+  buildInitialRoundCollection,
   drawPetCards,
 } from "../../features/solo/soloProgression";
 import { simulateBattle } from "../../lib/battleLogic";
 import { DUO_CHALLENGE_TEAM_SIZE, getRoundChallenges, getTutorialChallenge, SINGLE_CHALLENGE_TEAM_SIZE, SOLO_ENCOUNTERS, SOLO_MAX_BOSS_LEVEL, SOLO_TURN_LIMIT, TUTORIAL_POOL_NAMES, TUTORIAL_RECOMMENDED_TEAM } from "../../lib/soloConfig";
 import { buildChallengeEncounterTeam, buildEncounterTeam, buildRoundScore, calculateSoloScore } from "../../lib/soloLogic";
-import { DRAW_CARDS, MAX_BOSS_LEVEL } from "../../lib/gameConfig";
+import { DRAW_CARDS, INITIAL_ROUND_POOL_NAMES, MAX_BOSS_LEVEL } from "../../lib/gameConfig";
 import { canDrawPetAtRound } from "../../lib/cardDrawLogic";
-import { getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
+import { getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../../lib/challengeConfig";
 import { DEMO_ENEMY_ENCOUNTERS, ENEMY_DEFINITIONS } from "../../lib/characterConfig";
 import { ADDITIVE_EFFECT_KEYS } from "../../lib/effectRegistry";
 import { WORKER_ONLY_TEST_CHALLENGES } from "../../lib/workerTestConfig";
 import { buildEncounterTeamFromConfig } from "../../lib/encounterLogic";
+import { FORMAL_ENCOUNTER_SEED } from "../../../scripts/formalEncounterSeed.mjs";
+
+setFormalEncounterCatalog(FORMAL_ENCOUNTER_SEED);
 
 const unit = (name, atk, hp, special = {}, extra = {}) => ({
   name, atk, hp, special, level: 1, image: "", ...extra,
@@ -86,6 +90,11 @@ describe("新角色池", () => {
 
   it("每個回合固定抽 7 張", () => {
     expect(DRAW_CARDS).toBe(7);
+  });
+
+  it("正式第 1 回合使用固定 10 張初始角色池", () => {
+    expect(buildInitialRoundCollection().map((pet) => pet.name)).toEqual(INITIAL_ROUND_POOL_NAMES);
+    expect(buildInitialRoundCollection().every((pet) => pet.level === 1)).toBe(true);
   });
 
   it("隨機配置會從收藏選出指定數量並靠右填入隊伍", () => {

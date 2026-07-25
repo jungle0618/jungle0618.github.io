@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DUO_CLEAR_SCORE, MAX_BOSS_LEVEL } from "../lib/gameConfig";
 
 const STEPS = [
   {
@@ -49,7 +50,7 @@ const STEPS = [
   {
     key: "start-battle",
     title: "第六步：開始戰鬥",
-    body: "按下畫面下方的「開始戰鬥」。正式第 1 回合前會先檢查教學關 Lv.1；正式關卡會分別挑戰 Boss Lv.1～Lv.20，每個等級獨立計分。",
+    body: `按下畫面下方的「開始戰鬥」。正式第 1 回合前會先檢查教學關 Lv.1；正式關卡會分別挑戰 Boss Lv.1～Lv.${MAX_BOSS_LEVEL}，每個等級獨立計分。`,
     doneText: "已進入戰鬥",
     targetSelector: "[data-guided-target='start-battle']",
     arrowText: "按這裡開戰",
@@ -57,7 +58,7 @@ const STEPS = [
   {
     key: "watch-battle",
     title: "第七步：算分與結算",
-    body: "每個正式關卡都會挑戰 Boss Lv.1～Lv.20。分數等於通過的不同等級數，例如只通過 Lv.3～Lv.7 就是 5 分。10 回合總分是每個正式關卡分數相加。結算也會列出每隻角色的傷害、承傷、增益與護甲貢獻。",
+    body: `每個正式關卡都會挑戰 Boss Lv.1～Lv.${MAX_BOSS_LEVEL}。單人關每通過 1 個等級算 1 分；雙人關每通過 1 個等級算 ${DUO_CLEAR_SCORE} 分，例如雙人關只通過 Lv.3～Lv.7 就是 ${5 * DUO_CLEAR_SCORE} 分。10 回合總分是每個正式關卡分數相加。結算也會列出每隻角色的傷害、承傷、增益與護甲貢獻。`,
     doneText: "完成教學",
     targetSelector: ".page-root--game-shell .battle-section-panel",
     arrowText: "這裡看回放與分數",

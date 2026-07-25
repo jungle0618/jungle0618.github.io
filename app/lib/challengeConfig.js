@@ -1,4 +1,4 @@
-import { DEMO_ENEMY_ENCOUNTERS, ENEMY_ENCOUNTERS } from "./characterConfig";
+import { DEMO_ENEMY_ENCOUNTERS } from "./characterConfig";
 import {
   DUO_CONTRIBUTION_SIZE,
   DEMO_USES_FORMAL_ENCOUNTERS,
@@ -10,15 +10,32 @@ import {
 export { MAX_BOSS_LEVEL, ROUND_CHALLENGE_SCHEDULE } from "./gameConfig";
 export const SINGLE_CHALLENGE_TEAM_SIZE = TEAM_SIZE;
 export const DUO_CHALLENGE_TEAM_SIZE = DUO_CONTRIBUTION_SIZE * 2;
-export const GAME_ENCOUNTERS = ENEMY_ENCOUNTERS;
 export const DEMO_GAME_ENCOUNTERS = DEMO_ENEMY_ENCOUNTERS;
 export const CHALLENGE_MODES = Object.freeze({
   DEMO: "demo",
   MULTIPLAYER: "multiplayer",
 });
 
+let formalEncounterCatalog = [];
+export { formalEncounterCatalog as GAME_ENCOUNTERS };
+
+function cloneEncounter(encounter) {
+  if (!encounter) return null;
+  return JSON.parse(JSON.stringify(encounter));
+}
+
+export function setFormalEncounterCatalog(encounters = []) {
+  formalEncounterCatalog = Array.isArray(encounters)
+    ? encounters.map((encounter) => cloneEncounter(encounter)).filter(Boolean)
+    : [];
+}
+
+export function getFormalEncounterCatalog() {
+  return formalEncounterCatalog.map((encounter) => cloneEncounter(encounter)).filter(Boolean);
+}
+
 export function getGameEncounter(round) {
-  return GAME_ENCOUNTERS[Math.max(0, Math.min(GAME_ENCOUNTERS.length - 1, round - 1))];
+  return getFormalEncounterCatalog()[Math.max(0, Math.min(Math.max(0, formalEncounterCatalog.length - 1), round - 1))] ?? null;
 }
 
 export function getMultiplayerRoundChallenges(round) {
@@ -33,7 +50,8 @@ export function getRoundChallengesForMode(round, mode) {
   const challengeSpecs = ROUND_CHALLENGE_SCHEDULE[Math.max(0, Math.min(ROUND_CHALLENGE_SCHEDULE.length - 1, round - 1))] ?? [];
   const usesDemoEncounters = mode === CHALLENGE_MODES.DEMO && !DEMO_USES_FORMAL_ENCOUNTERS;
   const encounterKey = usesDemoEncounters ? "demoEncounterRound" : "multiplayerEncounterRound";
-  const encounters = usesDemoEncounters ? DEMO_GAME_ENCOUNTERS : GAME_ENCOUNTERS;
+  const encounters = usesDemoEncounters ? DEMO_GAME_ENCOUNTERS : formalEncounterCatalog;
+  if (!usesDemoEncounters && encounters.length === 0) return [];
   return challengeSpecs.map((spec, index) => ({
     id: `${round}-${index + 1}-${spec.kind}`,
     round,
