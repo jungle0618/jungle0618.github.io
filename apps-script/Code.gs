@@ -16,7 +16,7 @@ const SHEET_HEADERS = Object.freeze({
 });
 const SESSION_SECONDS = 12 * 60 * 60;
 // 後端唯一權威：前端不保存隊伍數量或配對規則。
-const MULTIPLAYER_TEAM_COUNT = 10;
+const MULTIPLAYER_TEAM_COUNT = 12;
 // BEGIN GENERATED GAME CONFIG — run: npm run config:sync
 const MAX_LEVEL = 10;
 const MAX_LEVEL_GAP = 3;
@@ -430,13 +430,16 @@ function rankedPairs_(teams) {
   const byId = new Map(teams.map((team) => [String(team.teamId), team]));
   const requiredIds = Array.from({ length: MULTIPLAYER_TEAM_COUNT }, (_, index) => String(index + 1));
   if (requiredIds.some((teamId) => !byId.has(teamId)) || teams.length !== MULTIPLAYER_TEAM_COUNT) {
-    throw apiError_("TEAM_CONFIGURATION_INVALID", "必須設定 1–10 共十個小隊後才能分組", 500);
+    throw apiError_("TEAM_CONFIGURATION_INVALID", "必須設定 1–12 共十二個小隊後才能分組", 500);
   }
   const sortByRank = (a, b) =>
     (Number(a.rank) || 99) - (Number(b.rank) || 99) || compareTeamIds_(a.teamId, b.teamId);
   const rankedEight = requiredIds.slice(0, 8).map((teamId) => byId.get(teamId)).sort(sortByRank);
-  const fixedPair = [byId.get("9"), byId.get("10")].sort(sortByRank);
-  const pairs = [fixedPair];
+  const fixedPairs = [
+    [byId.get("9"), byId.get("10")].sort(sortByRank),
+    [byId.get("11"), byId.get("12")].sort(sortByRank),
+  ];
+  const pairs = fixedPairs.slice();
   // 1–8 依當前排名由兩端配對：第一對第八、第二對第七，以此類推。
   for (let index = 0; index < rankedEight.length / 2; index += 1) {
     pairs.push([rankedEight[index], rankedEight[rankedEight.length - 1 - index]]);
@@ -454,6 +457,8 @@ function roundPairings_(round, teams, createdAt) {
       round, challengeId,
       pairId: pairIndex === 0
         ? "fixed-9-10"
+        : pairIndex === 1
+        ? "fixed-11-12"
         : `r${Number(pair[0].rank)}-${Number(pair[1].rank)}`,
       higherRankTeamId: String(pair[0].teamId), lowerRankTeamId: String(pair[1].teamId), createdAt,
       pairIndex,
@@ -962,14 +967,14 @@ function promptSetupPassword_(ui, accountLabel) {
   return password;
 }
 
-/** 既有 1–8 隊的安全遷移：只新增缺少的 9、10 隊，不清除任何現有資料。 */
+/** 既有專案補齊到 12 隊：只新增缺少的小隊，不清除任何現有資料。 */
 function addMissingTeamsToTen() {
   const existing = table_(SHEETS.teams);
   const existingIds = new Set(existing.map((team) => String(team.teamId)));
   const ui = SpreadsheetApp.getUi();
   const rows = [];
   const maxRank = Math.max(0, ...existing.map((team) => Number(team.rank) || 0));
-  for (let index = 1; index <= 10; index += 1) {
+  for (let index = 1; index <= MULTIPLAYER_TEAM_COUNT; index += 1) {
     if (existingIds.has(String(index))) continue;
     const password = promptSetupPassword_(ui, `第 ${index} 小隊`);
     rows.push([String(index), `第 ${index} 小隊`, passwordHash_(password), 0, maxRank + rows.length + 1, 1, true]);
