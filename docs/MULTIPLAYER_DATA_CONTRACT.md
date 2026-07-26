@@ -25,7 +25,7 @@
 | 工作表 | 主要欄位 | 用途 |
 | --- | --- | --- |
 | `GameState` | `round`, `phase`, `version`, `updatedAt` | 目前正式回合與寫入版本 |
-| `Teams` | `teamId`, `teamName`, `passwordHash`, `score`, `rank` | 十隊登入與排名 |
+| `Teams` | `teamId`, `teamName`, `passwordHash`, `score`, `rank` | 十二隊登入與排名 |
 | `Roster` | `teamId`, `petName`, `level`, `gameRoundsDeployed`, `version` | 各隊角色等級及持久狀態 |
 | `Lineups` | `round`, `challengeId`, `teamId`, `slotIndex`, `petName`, `version` | 玩家最後儲存的陣容；`petName` 可空白 |
 | `Pairings` | `round`, `challengeId`, `pairId`, `higherRankTeamId`, `lowerRankTeamId`, `createdAt` | 回合開始時固定的雙人關配對快照 |

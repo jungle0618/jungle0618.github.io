@@ -174,6 +174,60 @@ function WorkerRosterEditor({ team, busy, onSaveLevels }) {
   );
 }
 
+function WorkerAllLineupsDialog({ game, busy, onClose }) {
+  const challenges = useMemo(() => getMultiplayerRoundChallenges(game.round), [game.round]);
+  const rankedTeams = useMemo(() => [...(game.teams ?? [])]
+    .sort((a, b) => (Number(a.rank) || 99) - (Number(b.rank) || 99) || String(a.teamId).localeCompare(String(b.teamId))), [game.teams]);
+
+  return (
+    <div className="worker-team-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
+      <section className="worker-team-dialog worker-team-dialog--lineup-overview" role="dialog" aria-modal="true" aria-labelledby="worker-all-lineups-title">
+        <header className="worker-team-dialog__header">
+          <div>
+            <h2 id="worker-all-lineups-title">第 {game.round} 回合全部隊伍出戰列表</h2>
+            <p>依排名排序；各隊模板由上到下拼接，站位順序為後排 → 前排。</p>
+          </div>
+          <div className="worker-team-dialog__header-actions">
+            <button type="button" onClick={onClose} disabled={busy}>關閉</button>
+          </div>
+        </header>
+        <div className="worker-team-dialog__body worker-team-dialog__body--lineup-overview">
+          {rankedTeams.map((team) => (
+            <section className="worker-lineup-overview-team" key={team.teamId}>
+              <div className="worker-lineup-overview-team__heading">
+                <strong>#{team.rank || "—"} {team.teamName || `第 ${team.teamId} 小隊`}</strong>
+                <span>{team.score} 分</span>
+              </div>
+              <div className="worker-lineup-editors">
+                {challenges.map((challenge) => {
+                  const slotCount = challenge.kind === "duo" ? 3 : challenge.teamSize;
+                  const lineup = getSavedLineup(team, challenge, slotCount);
+                  return (
+                    <section className="worker-lineup-editor worker-lineup-editor--readonly" key={`${team.teamId}-${challenge.id}`}>
+                      <div className="worker-lineup-editor__heading">
+                        <strong>{getChallengeLabel(challenge)}｜{challenge.encounter.name}</strong>
+                        <span>{challenge.kind === "duo" ? "本隊 3 格" : `${challenge.teamSize} 格`}・後排 → 前排</span>
+                      </div>
+                      <div className="worker-lineup-slots worker-lineup-slots--readonly">
+                        {lineup.map((petName, slotIndex) => (
+                          <div key={slotIndex} className="worker-lineup-slot-readonly">
+                            <span>{slotIndex + 1}</span>
+                            <b>{petName || "空格"}</b>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function WorkerMode({ onBack }) {
   const api = useMemo(() => createMultiplayerApi(), []);
   const [session, setSession] = useState(null);
@@ -183,6 +237,7 @@ export default function WorkerMode({ onBack }) {
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
   const [overviewOpen, setOverviewOpen] = useState(false);
+  const [allLineupsOpen, setAllLineupsOpen] = useState(false);
   const [enemyScheduleOpen, setEnemyScheduleOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState(null);
   const [selectedTeamDetails, setSelectedTeamDetails] = useState(null);
@@ -224,6 +279,13 @@ export default function WorkerMode({ onBack }) {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [overviewOpen]);
+
+  useEffect(() => {
+    if (!allLineupsOpen) return undefined;
+    const onKeyDown = (event) => event.key === "Escape" && setAllLineupsOpen(false);
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [allLineupsOpen]);
 
   useEffect(() => {
     if (!selectedTeamId || busy) return undefined;
@@ -470,6 +532,7 @@ export default function WorkerMode({ onBack }) {
         <div className="mode-dashboard-actions">
           <div className="worker-action-group worker-action-group--info" aria-label="工人資訊">
             <button onClick={() => setOverviewOpen(true)} disabled={busy || !game}>各隊資訊</button>
+            <button onClick={() => setAllLineupsOpen(true)} disabled={busy || !game}>本回合全部出戰列表</button>
             <PetCompendiumLauncher includeEnemies includeLegendary />
             <button onClick={() => setEnemyScheduleOpen(true)} disabled={busy || !game}>關卡敵方陣容</button>
           <button onClick={openTestMode} disabled={busy}>測試模式</button>
@@ -529,6 +592,7 @@ export default function WorkerMode({ onBack }) {
           </section> : <section className="worker-team-dialog" role="dialog" aria-modal="true" aria-labelledby="worker-team-dialog-title"><p className="mode-loading">正在載入隊伍完整資料…</p></section>}
         </div>
       ) : null}
+      {allLineupsOpen && game ? <WorkerAllLineupsDialog game={game} busy={busy} onClose={() => setAllLineupsOpen(false)} /> : null}
       {overviewOpen && game ? <MultiplayerOverview game={game} session={session} cardProps={cardProps} onClose={() => setOverviewOpen(false)} onLogout={logout} onBack={onBack} onSelectHistory={openHistory} /> : null}
       {enemyScheduleOpen ? (
         <EnemyScheduleDialog

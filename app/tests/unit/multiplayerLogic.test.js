@@ -119,7 +119,7 @@ describe("多人模式基礎規則", () => {
     expect(result.battles[0].outcome.rightRemaining).toBe(0);
   });
 
-  it("雙人正式關只使用 Apps Script 回傳的五組聯隊", () => {
+  it("雙人正式關只使用 Apps Script 回傳的六組聯隊", () => {
     const jobs = buildOfficialBattleJobs({
       round: 2,
       currentPairings: [
@@ -128,17 +128,19 @@ describe("多人模式基礎規則", () => {
         { challengeId: "2-1-duo", pairId: "r3-6", higherRankTeamId: "3", lowerRankTeamId: "6" },
         { challengeId: "2-1-duo", pairId: "r4-5", higherRankTeamId: "4", lowerRankTeamId: "5" },
         { challengeId: "2-1-duo", pairId: "fixed-9-10", higherRankTeamId: "9", lowerRankTeamId: "10" },
+        { challengeId: "2-1-duo", pairId: "fixed-11-12", higherRankTeamId: "11", lowerRankTeamId: "12" },
       ],
-      teams: Array.from({ length: 10 }, (_, index) => ({
+      teams: Array.from({ length: 12 }, (_, index) => ({
         teamId: String(index + 1),
         rank: index + 1,
         roster: [],
         currentLineups: [],
       })),
     });
-    expect(jobs).toHaveLength(5 * MAX_BOSS_LEVEL);
+    expect(jobs).toHaveLength(6 * MAX_BOSS_LEVEL);
     expect(jobs[0].teamIds).toEqual(["1", "8"]);
     expect(jobs.some((job) => job.teamIds.join(",") === "9,10")).toBe(true);
+    expect(jobs.some((job) => job.teamIds.join(",") === "11,12")).toBe(true);
     expect(jobs.every((job) => job.leftTeam.length === 6)).toBe(true);
   });
 

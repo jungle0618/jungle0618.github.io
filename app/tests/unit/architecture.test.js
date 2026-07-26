@@ -67,7 +67,7 @@ describe("模式依賴邊界", () => {
     expect(appsScript).toMatch(/END GENERATED GAME CONFIG/);
     expect(appsScript).toMatch(/const BATTLE_TURN_LIMIT = 35;/);
     expect(appsScript).toMatch(/const MAX_BOSS_LEVEL = 30;/);
-    expect(appsScript).toMatch(/const MULTIPLAYER_TEAM_COUNT = 10;/);
+    expect(appsScript).toMatch(/const MULTIPLAYER_TEAM_COUNT = 12;/);
     expect(appsScript).toMatch(/const ONCE_PER_GAME_PET_NAMES = Object\.freeze\(\["鯊魚","變色龍"\]\);/);
   });
 });
