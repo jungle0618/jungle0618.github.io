@@ -381,7 +381,7 @@ export default function MultiplayerMode({ onBack }) {
       encounterProps={{ encounter: selectedChallenge?.encounter, monsters: selectedChallenge ? buildChallengeEncounterTeam(selectedChallenge, bossLevel) : [], score: battleReplay?.score, bossLevel, challenges: challengePanels, onSelectMonster: setCompendiumPet }}
       prepareActions={[
         { id: "test", label: "測試戰鬥", onClick: testBattles, disabled: busy },
-        { id: "save", label: busyAction === "save" ? "儲存中…" : "儲存陣容", onClick: saveLineups, disabled: busy, active: busyAction === "save" },
+        { id: "save", label: busyAction === "save" ? "儲存中…" : "儲存陣容", onClick: saveLineups, disabled: busy, active: busyAction === "save", primary: true },
         { id: "refresh", label: busyAction === "refresh" ? "讀取中…" : "重新整理", onClick: refreshGame, disabled: busy, active: busyAction === "refresh", primary: false },
       ]}
       battleActions={{ secondary: { label: "返回編隊", onClick: returnToPreparation } }}

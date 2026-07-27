@@ -1069,20 +1069,6 @@
 .is-pending, button.is-pending:disabled, .save-button.is-pending:disabled, .main-menu-button.is-pending:disabled { opacity: .82; transform: translateY(2px) scale(.98); box-shadow: inset 0 2px 5px rgba(15, 23, 42, .24); filter: brightness(.94); }
 @keyframes multiplayer-busy-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .multiplayer-busy-spinner { animation: none; } }
-@media (min-width: 901px) {
-  .page-root--game-shell .bottom-action-bar [data-action-id="save"] {
-    order: 1;
-    flex: 1 1 0;
-  }
-  .page-root--game-shell .bottom-action-bar [data-action-id="test"] {
-    order: 2;
-    flex: 1.9 1.9 0;
-  }
-  .page-root--game-shell .bottom-action-bar [data-action-id="refresh"] {
-    order: 3;
-    flex: 1 1 0;
-  }
-}
 
 @media (max-width: 900px) {
   .multiplayer-overview-panel { position: static; width: auto; max-height: none; margin: 10px 12px 110px; }
