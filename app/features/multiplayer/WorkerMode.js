@@ -88,7 +88,7 @@ function summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamLine
     hasLineupChanges: changedChallenges.length > 0,
     changedChallengeCount: changedChallenges.length,
     levelRange,
-    exceedsLevelGap: levelRange >= MAX_LEVEL_GAP,
+    exceedsLevelGap: levelRange > MAX_LEVEL_GAP,
   };
 }
 
@@ -685,7 +685,7 @@ export default function WorkerMode({ onBack }) {
                   ) : null}
                   {draftSummary.exceedsLevelGap ? (
                     <small className="is-warning">
-                      等級差 {draftSummary.levelRange}，已達警戒值 {MAX_LEVEL_GAP}
+                      等級差 {draftSummary.levelRange}，已超過警戒值 {MAX_LEVEL_GAP}
                     </small>
                   ) : null}
                 </div>
