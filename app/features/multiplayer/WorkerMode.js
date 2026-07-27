@@ -11,7 +11,7 @@ import { calculateOfficialRound, getOfficialLineupVersions } from "./officialRou
 import { hydrateMultiplayerRoster, serializeLineup } from "./multiplayerAdapter";
 import { getChallengeLabel, getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../../lib/challengeConfig";
 import { ITEM_ICONS } from "../../lib/assetConfig";
-import { DRAW_CARDS, INITIAL_ROUND_POOL_NAMES, MAX_PET_LEVEL, MAX_ROUND } from "../../lib/gameConfig";
+import { DRAW_CARDS, INITIAL_ROUND_POOL_NAMES, MAX_LEVEL_GAP, MAX_PET_LEVEL, MAX_ROUND } from "../../lib/gameConfig";
 import { formatDisplayName, getPetCompendiumList } from "../../lib/petCatalog";
 import { configureTeamsFromCollection } from "../../lib/lineupLogic";
 import { canDrawPetAtRound } from "../../lib/cardDrawLogic";
@@ -33,16 +33,66 @@ function getLineupVersion(team, challengeId) {
     .map((row) => Number(row.version) || 0));
 }
 
-function WorkerLineupEditor({ team, round, challenges, busy, onSave }) {
-  const initialLineups = useMemo(() => Object.fromEntries(challenges.map((challenge) => {
+function createLineupDraft(team, challenges) {
+  return Object.fromEntries(challenges.map((challenge) => {
     const slotCount = challenge.kind === "duo" ? 3 : challenge.teamSize;
     return [challenge.id, getSavedLineup(team, challenge, slotCount)];
-  })), [challenges, team]);
-  const [drafts, setDrafts] = useState(initialLineups);
-  const [savingId, setSavingId] = useState(null);
+  }));
+}
 
-  useEffect(() => setDrafts(initialLineups), [initialLineups]);
+function createRosterLevelDraft(team, allPets) {
+  const rosterByName = new Map((team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet]));
+  return Object.fromEntries(allPets.map((pet) => [
+    pet.name, Number(rosterByName.get(pet.name)?.level) || 0,
+  ]));
+}
 
+function buildUsedByChallenge(challenges, drafts) {
+  return Object.fromEntries(challenges.map((challenge) => [
+    challenge.id,
+    new Set(challenges
+      .filter((other) => other.id !== challenge.id)
+      .flatMap((other) => drafts[other.id] ?? [])
+      .filter(Boolean)),
+  ]));
+}
+
+function lineupsMatch(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
+function levelRangeFromDraft(draftLevels) {
+  const unlockedLevels = Object.values(draftLevels).map((value) => Number(value) || 0).filter((value) => value > 0);
+  if (!unlockedLevels.length) return 0;
+  return Math.max(...unlockedLevels) - Math.min(...unlockedLevels);
+}
+
+function summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamLineupDrafts) {
+  const initialLevels = createRosterLevelDraft(team, allPets);
+  const draftLevels = teamLevelDrafts[String(team.teamId)] ?? initialLevels;
+  const initialLineups = createLineupDraft(team, challenges);
+  const draftLineups = teamLineupDrafts[String(team.teamId)] ?? initialLineups;
+  let increasedLevels = 0;
+  let decreasedLevels = 0;
+  allPets.forEach((pet) => {
+    const delta = (draftLevels[pet.name] ?? 0) - (initialLevels[pet.name] ?? 0);
+    if (delta > 0) increasedLevels += delta;
+    if (delta < 0) decreasedLevels += Math.abs(delta);
+  });
+  const changedChallenges = challenges.filter((challenge) => !lineupsMatch(draftLineups[challenge.id] ?? [], initialLineups[challenge.id] ?? []));
+  const levelRange = levelRangeFromDraft(draftLevels);
+  return {
+    increasedLevels,
+    decreasedLevels,
+    hasLineupChanges: changedChallenges.length > 0,
+    changedChallengeCount: changedChallenges.length,
+    levelRange,
+    exceedsLevelGap: levelRange >= MAX_LEVEL_GAP,
+  };
+}
+
+function WorkerLineupEditor({ team, challenges, busy, drafts, onUpdateSlot }) {
   const usedByChallenge = useMemo(() => Object.fromEntries(challenges.map((challenge) => [
     challenge.id,
     new Set(challenges
@@ -52,25 +102,7 @@ function WorkerLineupEditor({ team, round, challenges, busy, onSave }) {
   ])), [challenges, drafts]);
 
   function updateSlot(challengeId, slotIndex, petName) {
-    setDrafts((current) => ({
-      ...current,
-      [challengeId]: current[challengeId].map((value, index) => index === slotIndex ? petName : value),
-    }));
-  }
-
-  async function save(challenge) {
-    setSavingId(challenge.id);
-    try {
-      await onSave({
-        teamId: team.teamId,
-        round,
-        challengeId: challenge.id,
-        lineup: drafts[challenge.id],
-        version: getLineupVersion(team, challenge.id),
-      });
-    } finally {
-      setSavingId(null);
-    }
+    onUpdateSlot(team.teamId, challengeId, slotIndex, petName);
   }
 
   return (
@@ -89,7 +121,7 @@ function WorkerLineupEditor({ team, round, challenges, busy, onSave }) {
               {lineup.map((petName, slotIndex) => (
                 <label key={slotIndex}>
                   <span>{slotIndex + 1}</span>
-                  <select value={petName} onChange={(event) => updateSlot(challenge.id, slotIndex, event.target.value)} disabled={busy || savingId === challenge.id}>
+                  <select value={petName} onChange={(event) => updateSlot(challenge.id, slotIndex, event.target.value)} disabled={busy}>
                     <option value="">空格</option>
                     {team.roster.map((pet) => {
                       const usedOnce = ONCE_PER_GAME_PET_NAMES.includes(String(pet.petName)) && Number(pet.gameRoundsDeployed) > 0;
@@ -102,9 +134,6 @@ function WorkerLineupEditor({ team, round, challenges, busy, onSave }) {
             </div>
             {duplicate ? <small className="worker-lineup-warning">同一陣容有重複角色</small> : null}
             {reused ? <small className="worker-lineup-warning">有角色已用於本回合其他關卡</small> : null}
-            <button className="worker-lineup-save" onClick={() => save(challenge)} disabled={busy || savingId || duplicate || reused}>
-              {savingId === challenge.id ? "儲存中…" : "儲存這個陣容"}
-            </button>
           </section>
         );
       })}
@@ -112,25 +141,8 @@ function WorkerLineupEditor({ team, round, challenges, busy, onSave }) {
   );
 }
 
-function WorkerRosterEditor({ team, busy, onSaveLevels }) {
-  const allPets = useMemo(() => getPetCompendiumList().slice().sort((a, b) =>
-    (Number(b.tier) || 1) - (Number(a.tier) || 1) || String(a.name).localeCompare(String(b.name), "zh-Hant")
-  ), []);
-  const rosterByName = useMemo(() => new Map((team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet])), [team.roster, team.rosterMeta]);
-  const initialLevels = useMemo(() => Object.fromEntries(allPets.map((pet) => [
-    pet.name, Number(rosterByName.get(pet.name)?.level) || 0,
-  ])), [allPets, rosterByName]);
-  const [draftLevels, setDraftLevels] = useState(initialLevels);
-  const changedPets = allPets.filter((pet) => draftLevels[pet.name] !== initialLevels[pet.name]);
-
-  useEffect(() => setDraftLevels(initialLevels), [initialLevels]);
-
-  function setLevel(petName, level) {
-    setDraftLevels((current) => ({
-      ...current,
-      [petName]: Math.max(0, Math.min(MAX_PET_LEVEL, Math.floor(Number(level) || 0))),
-    }));
-  }
+function WorkerRosterEditor({ team, allPets, busy, draftLevels, onSetLevel }) {
+  const initialLevels = useMemo(() => createRosterLevelDraft(team, allPets), [allPets, team]);
 
   return (
     <>
@@ -145,9 +157,9 @@ function WorkerRosterEditor({ team, busy, onSaveLevels }) {
                 <div><strong>{pet.name}</strong><small>稀有度 {pet.tier}</small></div>
               </div>
               <div className="worker-roster-pet__controls">
-                <button type="button" aria-label={`${pet.name}降一級`} onClick={() => setLevel(pet.name, level - 1)} disabled={busy || level <= 0}>−</button>
+                <button type="button" aria-label={`${pet.name}降一級`} onClick={() => onSetLevel(team.teamId, pet.name, level - 1)} disabled={busy || level <= 0}>−</button>
                 <span>{level > 0 ? `Lv.${level}` : "未解鎖"}</span>
-                <button type="button" aria-label={`${pet.name}升一級`} onClick={() => setLevel(pet.name, level + 1)} disabled={busy || level >= MAX_PET_LEVEL}>＋</button>
+                <button type="button" aria-label={`${pet.name}升一級`} onClick={() => onSetLevel(team.teamId, pet.name, level + 1)} disabled={busy || level >= MAX_PET_LEVEL}>＋</button>
               </div>
               <small className={`worker-roster-pet__delta${delta > 0 ? " is-increase" : delta < 0 ? " is-decrease" : ""}`}>
                 {delta > 0 ? `增加 ${delta} 級` : delta < 0 ? `減少 ${Math.abs(delta)} 級` : "等級未變更"}
@@ -156,20 +168,6 @@ function WorkerRosterEditor({ team, busy, onSaveLevels }) {
           );
         })}
       </div>
-      <button
-        type="button"
-        className="worker-lineup-save"
-        disabled={busy || changedPets.length === 0}
-        onClick={() => onSaveLevels({
-          teamId: team.teamId,
-          updates: changedPets.map((pet) => {
-            const rosterPet = rosterByName.get(pet.name);
-            return { petName: pet.name, level: draftLevels[pet.name], version: Number(rosterPet?.version) || 0 };
-          }),
-        })}
-      >
-        {changedPets.length ? `確認等級變更（${changedPets.length} 隻）` : "等級未變更"}
-      </button>
     </>
   );
 }
@@ -240,15 +238,55 @@ export default function WorkerMode({ onBack }) {
   const [allLineupsOpen, setAllLineupsOpen] = useState(false);
   const [enemyScheduleOpen, setEnemyScheduleOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState(null);
-  const [selectedTeamDetails, setSelectedTeamDetails] = useState(null);
   const [workerTestData, setWorkerTestData] = useState(null);
   const [testModeOpen, setTestModeOpen] = useState(false);
   const [battleReplay, setBattleReplay] = useState(null);
   const [battleReplays, setBattleReplays] = useState([]);
   const [bossLevel, setBossLevel] = useState(1);
+  const [teamLevelDrafts, setTeamLevelDrafts] = useState({});
+  const [teamLineupDrafts, setTeamLineupDrafts] = useState({});
+  const allPets = useMemo(() => getPetCompendiumList().slice().sort((a, b) =>
+    (Number(b.tier) || 1) - (Number(a.tier) || 1) || String(a.name).localeCompare(String(b.name), "zh-Hant")
+  ), []);
   const cardProps = useMemo(() => ({ formatDisplayName, itemIcons: ITEM_ICONS, StatIcon, showPersistentProgress: true }), []);
-  // 摘要資料刻意不含 roster；點選隊伍後必須等 loadWorkerTeam 完整資料回來。
-  const selectedTeam = selectedTeamId ? selectedTeamDetails : null;
+  const challenges = useMemo(() => game ? getMultiplayerRoundChallenges(game.round) : [], [game]);
+  const selectedTeam = useMemo(() => (
+    selectedTeamId
+      ? (game?.teams ?? []).find((team) => String(team.teamId) === String(selectedTeamId)) ?? null
+      : null
+  ), [game?.teams, selectedTeamId]);
+  const selectedTeamLevelDraft = useMemo(() => (
+    selectedTeam ? (teamLevelDrafts[String(selectedTeam.teamId)] ?? createRosterLevelDraft(selectedTeam, allPets)) : null
+  ), [allPets, selectedTeam, teamLevelDrafts]);
+  const selectedTeamLineupDraft = useMemo(() => (
+    selectedTeam ? (teamLineupDrafts[String(selectedTeam.teamId)] ?? createLineupDraft(selectedTeam, challenges)) : null
+  ), [challenges, selectedTeam, teamLineupDrafts]);
+  const pendingLevelChanges = useMemo(() => {
+    if (!game) return 0;
+    return game.teams.reduce((total, team) => {
+      const draft = teamLevelDrafts[String(team.teamId)];
+      if (!draft) return total;
+      const initial = createRosterLevelDraft(team, allPets);
+      return total + allPets.filter((pet) => draft[pet.name] !== initial[pet.name]).length;
+    }, 0);
+  }, [allPets, game, teamLevelDrafts]);
+  const pendingLineupChanges = useMemo(() => {
+    if (!game) return 0;
+    return game.teams.reduce((total, team) => {
+      const draft = teamLineupDrafts[String(team.teamId)];
+      if (!draft) return total;
+      const initial = createLineupDraft(team, challenges);
+      return total + challenges.filter((challenge) => JSON.stringify(draft[challenge.id] ?? []) !== JSON.stringify(initial[challenge.id] ?? [])).length;
+    }, 0);
+  }, [challenges, game, teamLineupDrafts]);
+  const teamDraftSummaries = useMemo(() => {
+    if (!game) return {};
+    return Object.fromEntries(game.teams.map((team) => [
+      String(team.teamId),
+      summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamLineupDrafts),
+    ]));
+  }, [allPets, challenges, game, teamLevelDrafts, teamLineupDrafts]);
+  const hasPendingChanges = pendingLevelChanges > 0 || pendingLineupChanges > 0;
 
   useEffect(() => {
     if (!status) return undefined;
@@ -260,6 +298,8 @@ export default function WorkerMode({ onBack }) {
     const nextGame = await api.loadWorkerGame();
     setFormalEncounterCatalog(nextGame.formalEncounters ?? []);
     setGame(nextGame);
+    setTeamLevelDrafts({});
+    setTeamLineupDrafts({});
   }, [api]);
   useEffect(() => {
     let cancelled = false;
@@ -310,9 +350,38 @@ export default function WorkerMode({ onBack }) {
 
   async function selectTeam(teamId) {
     setSelectedTeamId(String(teamId));
-    setSelectedTeamDetails(null);
-    try { const result = await api.loadWorkerTeam(teamId); setSelectedTeamDetails(result.team); }
-    catch (nextError) { setError(nextError.message); }
+  }
+
+  function updateTeamLevelDraft(teamId, petName, level) {
+    const normalizedTeamId = String(teamId);
+    const team = (game?.teams ?? []).find((item) => String(item.teamId) === normalizedTeamId);
+    if (!team) return;
+    setTeamLevelDrafts((current) => {
+      const base = current[normalizedTeamId] ?? createRosterLevelDraft(team, allPets);
+      return {
+        ...current,
+        [normalizedTeamId]: {
+          ...base,
+          [petName]: Math.max(0, Math.min(MAX_PET_LEVEL, Math.floor(Number(level) || 0))),
+        },
+      };
+    });
+  }
+
+  function updateTeamLineupDraft(teamId, challengeId, slotIndex, petName) {
+    const normalizedTeamId = String(teamId);
+    const team = (game?.teams ?? []).find((item) => String(item.teamId) === normalizedTeamId);
+    if (!team) return;
+    setTeamLineupDrafts((current) => {
+      const base = current[normalizedTeamId] ?? createLineupDraft(team, challenges);
+      return {
+        ...current,
+        [normalizedTeamId]: {
+          ...base,
+          [challengeId]: (base[challengeId] ?? []).map((value, index) => index === slotIndex ? petName : value),
+        },
+      };
+    });
   }
 
   async function openTestMode() {
@@ -376,10 +445,6 @@ export default function WorkerMode({ onBack }) {
           .map((pet) => pet.name),
       });
       await loadGame();
-      if (selectedTeamId === String(teamId)) {
-        const refreshed = await api.loadWorkerTeam(teamId);
-        setSelectedTeamDetails(refreshed.team);
-      }
       setStatus(`第 ${result.round} 回合已替第 ${teamId} 小隊自動抽 ${result.cardCount} 張卡片`);
     } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
   }
@@ -390,30 +455,66 @@ export default function WorkerMode({ onBack }) {
     try {
       const result = await api.setInitialRosters({ clearCurrentRoundLineups: true });
       await loadGame();
-      if (selectedTeamId) {
-        const refreshed = await api.loadWorkerTeam(selectedTeamId);
-        setSelectedTeamDetails(refreshed.team);
-      }
       setStatus(`已將 ${result.teams} 個小隊重設為固定初始 ${result.initialPoolSize} 張角色池，並清空第 ${result.round} 回合陣容`);
     } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
   }
 
-  async function saveRosterLevels(payload) {
-    setBusy(true); setBusyAction("levels"); setError(null); setStatus(null);
-    try {
-      const result = await api.updateRosterLevels(payload);
-      await loadGame();
-      setStatus(`已確認 ${result.updated} 隻角色的等級變更；解鎖 ${result.unlocked ?? 0} 隻，鎖定 ${result.locked ?? 0} 隻`);
-    } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
-  }
+  async function saveAllChanges() {
+    if (!game || !hasPendingChanges) return;
+    const lineupValidation = game.teams.map((team) => {
+      const drafts = teamLineupDrafts[String(team.teamId)] ?? createLineupDraft(team, challenges);
+      const usedByChallenge = buildUsedByChallenge(challenges, drafts);
+      const invalidChallenge = challenges.find((challenge) => {
+        const lineup = drafts[challenge.id] ?? [];
+        const duplicate = lineup.some((name, index) => name && lineup.indexOf(name) !== index);
+        const reused = lineup.some((name) => name && usedByChallenge[challenge.id].has(name));
+        return duplicate || reused;
+      });
+      return invalidChallenge ? { team, challenge: invalidChallenge } : null;
+    }).find(Boolean);
+    if (lineupValidation) {
+      setError(`第 ${lineupValidation.team.teamId} 小隊的 ${getChallengeLabel(lineupValidation.challenge)} 陣容有重複或跨關重用角色`);
+      return;
+    }
 
-  async function saveLineup(payload) {
-    setBusy(true); setBusyAction("lineup"); setError(null); setStatus(null);
+    setBusy(true); setBusyAction("save-all"); setError(null); setStatus("正在儲存所有暫存變更…");
     try {
-      await api.saveWorkerLineup(payload);
+      const teams = game.teams.map((team) => {
+        const teamId = String(team.teamId);
+        const rosterDraft = teamLevelDrafts[teamId];
+        const lineupDraft = teamLineupDrafts[teamId];
+        const rosterByName = new Map((team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet]));
+        const initialLevels = createRosterLevelDraft(team, allPets);
+        const initialLineups = createLineupDraft(team, challenges);
+        const rosterUpdates = rosterDraft
+          ? allPets
+            .filter((pet) => rosterDraft[pet.name] !== initialLevels[pet.name])
+            .map((pet) => {
+              const rosterPet = rosterByName.get(pet.name);
+              return { petName: pet.name, level: rosterDraft[pet.name], version: Number(rosterPet?.version) || 0 };
+            })
+          : [];
+        const lineupUpdates = lineupDraft
+          ? challenges
+            .filter((challenge) => !lineupsMatch(lineupDraft[challenge.id] ?? [], initialLineups[challenge.id] ?? []))
+            .map((challenge) => ({
+              challengeId: challenge.id,
+              lineup: lineupDraft[challenge.id] ?? [],
+              version: getLineupVersion(team, challenge.id),
+            }))
+          : [];
+        return rosterUpdates.length || lineupUpdates.length ? { teamId, rosterUpdates, lineupUpdates } : null;
+      }).filter(Boolean);
+      const result = await api.saveWorkerDrafts({ round: game.round, teams });
       await loadGame();
-      setStatus("陣容已儲存；未填滿的欄位會以空格參戰");
-    } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
+      setStatus(`已批次儲存 ${result.updatedPets ?? 0} 項等級變更與 ${result.updatedChallenges ?? 0} 個關卡陣容`);
+      setSelectedTeamId(null);
+    } catch (nextError) {
+      setError(nextError.message);
+      setStatus(null);
+    } finally {
+      setBusy(false); setBusyAction(null);
+    }
   }
 
   async function autoConfigureAllLineups() {
@@ -556,13 +657,49 @@ export default function WorkerMode({ onBack }) {
       {!game ? <p className="mode-loading">讀取遊戲資料中…</p> : (
         <>
           <section className="mode-panel"><h2>第 {game.round} 回合・{game.phase}</h2><p>資料版本 {game.version}</p></section>
-          <section className="mode-panel"><h2>所有小隊目前資料</h2><p>點選一個小隊，開啟完整的角色等級與出戰隊伍設定。</p><div className="worker-team-grid">{game.teams.map((team) => (
-          <button type="button" className="worker-team-card" key={team.teamId} onClick={() => selectTeam(team.teamId)} disabled={busy}>
+          <section className="mode-panel"><h2>所有小隊目前資料</h2><p>點選一個小隊編輯草稿；完成後回到主畫面底部統一儲存。</p><div className="worker-team-grid">{game.teams.map((team) => {
+            const draftSummary = teamDraftSummaries[String(team.teamId)] ?? {
+              increasedLevels: 0,
+              decreasedLevels: 0,
+              hasLineupChanges: false,
+              changedChallengeCount: 0,
+              levelRange: 0,
+              exceedsLevelGap: false,
+            };
+            return (
+          <button type="button" className={`worker-team-card${draftSummary.exceedsLevelGap ? " worker-team-card--warning" : ""}`} key={team.teamId} onClick={() => selectTeam(team.teamId)} disabled={busy}>
               <strong>#{team.rank || "—"} {team.teamName || `第 ${team.teamId} 小隊`}</strong>
               <span>{team.score} 分</span>
               <span>已解鎖 {team.rosterCount ?? team.roster?.length ?? 0} 隻角色</span>
+              {draftSummary.increasedLevels || draftSummary.decreasedLevels || draftSummary.hasLineupChanges || draftSummary.exceedsLevelGap ? (
+                <div className="worker-team-card__drafts">
+                  {draftSummary.increasedLevels || draftSummary.decreasedLevels ? (
+                    <small className="is-dirty">
+                      等級 {draftSummary.increasedLevels ? `+${draftSummary.increasedLevels}` : "+0"} / {draftSummary.decreasedLevels ? `-${draftSummary.decreasedLevels}` : "-0"}
+                    </small>
+                  ) : null}
+                  {draftSummary.hasLineupChanges ? (
+                    <small className="is-dirty">
+                      陣容已修改 {draftSummary.changedChallengeCount} 關
+                    </small>
+                  ) : null}
+                  {draftSummary.exceedsLevelGap ? (
+                    <small className="is-warning">
+                      等級差 {draftSummary.levelRange}，已達警戒值 {MAX_LEVEL_GAP}
+                    </small>
+                  ) : null}
+                </div>
+              ) : null}
             </button>
-          ))}</div></section>
+            );
+          })}</div></section>
+          <section className="mode-panel">
+            <h2>統一儲存</h2>
+            <p>目前暫存 {pendingLevelChanges} 項等級變更、{pendingLineupChanges} 個關卡陣容。編輯小隊時不會立即送出；按下這裡才會寫回 Google Sheet。</p>
+            <button type="button" className={`worker-lineup-save${busyAction === "save-all" ? " is-pending" : ""}`} onClick={saveAllChanges} disabled={busy || !hasPendingChanges}>
+              {busyAction === "save-all" ? "儲存中…" : hasPendingChanges ? "儲存所有暫存變更" : "目前沒有待儲存變更"}
+            </button>
+          </section>
         </>
       )}
       {selectedTeamId ? (
@@ -572,24 +709,25 @@ export default function WorkerMode({ onBack }) {
               <div><h2 id="worker-team-dialog-title">#{selectedTeam.rank || "—"} {selectedTeam.teamName || `第 ${selectedTeam.teamId} 小隊`}</h2><p>{selectedTeam.score} 分・已解鎖 {selectedTeam.roster?.length ?? selectedTeam.rosterCount ?? 0} 隻</p></div>
               <div className="worker-team-dialog__header-actions">
                 <button type="button" onClick={resetTeamPassword} disabled={busy}>重設密碼</button>
-                <button type="button" onClick={() => { setSelectedTeamId(null); setSelectedTeamDetails(null); }} disabled={busy}>關閉</button>
+                <button type="button" onClick={() => setSelectedTeamId(null)} disabled={busy}>關閉</button>
               </div>
             </header>
             <div className="worker-team-dialog__body">
               <section className="worker-team-detail__section">
                 <h3>調整角色等級</h3>
-                <p>Lv.0 代表未解鎖；每張角色卡下方會顯示本次增加或減少的等級，按確認後才送出。</p>
+                <p>Lv.0 代表未解鎖；每張角色卡下方會顯示本次增加或減少的等級，變更會先暫存在本頁。</p>
                 <button type="button" className="worker-lineup-save" onClick={() => drawSelectedTeamRoster(selectedTeam.teamId)} disabled={busy || !game || game.phase === "finished" || game.round === 1}>
                   {busyAction === "draw-one" ? "抽卡中…" : `這隊自動抽 ${DRAW_CARDS} 張`}
                 </button>
-                <WorkerRosterEditor team={selectedTeam} busy={busy} onSaveLevels={saveRosterLevels} />
+                <WorkerRosterEditor team={selectedTeam} allPets={allPets} busy={busy} draftLevels={selectedTeamLevelDraft} onSetLevel={updateTeamLevelDraft} />
               </section>
               <section className="worker-team-detail__section">
                 <h3>設定出戰隊伍</h3>
-                <WorkerLineupEditor team={selectedTeam} round={game.round} challenges={getMultiplayerRoundChallenges(game.round)} busy={busy} onSave={saveLineup} />
+                <p>陣容變更會先暫存；請回主畫面底部按一次儲存。</p>
+                <WorkerLineupEditor team={selectedTeam} challenges={challenges} busy={busy} drafts={selectedTeamLineupDraft} onUpdateSlot={updateTeamLineupDraft} />
               </section>
             </div>
-          </section> : <section className="worker-team-dialog" role="dialog" aria-modal="true" aria-labelledby="worker-team-dialog-title"><p className="mode-loading">正在載入隊伍完整資料…</p></section>}
+          </section> : <section className="worker-team-dialog" role="dialog" aria-modal="true" aria-labelledby="worker-team-dialog-title"><p className="mode-loading">找不到隊伍資料，請重新整理</p></section>}
         </div>
       ) : null}
       {allLineupsOpen && game ? <WorkerAllLineupsDialog game={game} busy={busy} onClose={() => setAllLineupsOpen(false)} /> : null}

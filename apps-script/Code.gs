@@ -115,6 +115,7 @@ function dispatch_(action, token, payload) {
     case "setInitialRosters": requireSession_(token, "worker"); return withWriteLock_(() => setInitialRosters_(payload));
     case "updateRosterLevels": requireSession_(token, "worker"); return withWriteLock_(() => updateRosterLevels_(payload));
     case "saveWorkerLineup": requireSession_(token, "worker"); return withWriteLock_(() => saveLineup_(payload.teamId, payload));
+    case "saveWorkerDrafts": requireSession_(token, "worker"); return withWriteLock_(() => saveWorkerDrafts_(payload));
     case "autoConfigureAllLineups": requireSession_(token, "worker"); return withWriteLock_(() => autoConfigureAllLineups_(payload));
     case "saveOfficialRound": requireSession_(token, "worker"); return withWriteLock_(() => saveOfficialRound_(payload));
     case "resetGame": requireSession_(token, "worker"); return withWriteLock_(() => resetGame_(payload));
@@ -505,7 +506,6 @@ function loadPlayerGame_(session, payload) {
   const partnerId = pairing && (String(pairing.higherRankTeamId) === String(session.teamId) ? pairing.lowerRankTeamId : pairing.higherRankTeamId);
   const partner = game.teams.find((team) => String(team.teamId) === String(partnerId));
   const partnerLineups = (partner && partner.currentLineups || []).filter((row) => duoIds.indexOf(String(row.challengeId)) >= 0);
-  const partnerNames = new Set(partnerLineups.map((row) => String(row.petName || "")).filter(Boolean));
   const visibleRoster = (game.roster || []).filter((pet) => String(pet.teamId) === String(session.teamId));
   const visibleLineups = (game.lineups || []).filter((row) => String(row.teamId) === String(session.teamId));
   return {
@@ -526,7 +526,7 @@ function loadPlayerGame_(session, payload) {
     duoPartner: partner && duoIds.length ? {
       teamId: partner.teamId, teamName: partner.teamName, rank: partner.rank,
       currentLineups: partnerLineups,
-      roster: partner.roster.filter((pet) => partnerNames.has(String(pet.petName))),
+      roster: partner.roster,
     } : null,
     duoPairings: pairings,
     battleHistory: game.battleHistory,
@@ -621,6 +621,13 @@ function saveLineup_(teamId, payload) {
   const now = new Date().toISOString();
   appendRows_(SHEETS.lineups, payload.lineup.map((name, index) => [round, String(payload.challengeId), String(teamId), index, name || "", nextVersion, now]));
   return { ok: true, version: nextVersion, updatedAt: now };
+}
+
+function getLineupSlots_(rows, challengeId, slotCount) {
+  const matching = rows
+    .filter((row) => String(row.challengeId) === String(challengeId))
+    .sort((a, b) => Number(a.slotIndex) - Number(b.slotIndex));
+  return Array.from({ length: slotCount }, (_, index) => matching.find((row) => Number(row.slotIndex) === index)?.petName || "");
 }
 
 function drawRosters_(payload) {
@@ -794,6 +801,132 @@ function updateRosterLevels_(payload) {
   }
   appendRows_(SHEETS.roster, newRows);
   return { updated: updates.length, unlocked, locked };
+}
+
+function saveWorkerDrafts_(payload) {
+  const game = loadRawGameState_();
+  if (Number(payload.round) !== game.round || !Array.isArray(payload.teams)) throw apiError_("VERSION_CONFLICT", "回合已變更，請重新載入", 409);
+  const entries = payload.teams;
+  const teamIds = entries.map((entry) => String(entry.teamId || ""));
+  if (teamIds.some((teamId) => !teamId) || new Set(teamIds).size !== teamIds.length) throw apiError_("INVALID_WORKER_DRAFTS", "小隊資料格式錯誤", 400);
+
+  const rosterSheet = sheet_(SHEETS.roster);
+  const rosterRows = table_(SHEETS.roster);
+  const lineupRows = table_(SHEETS.lineups);
+  const existingWrites = [];
+  const newRosterRows = [];
+  const newLineupRows = [];
+  const now = new Date().toISOString();
+  let updatedPets = 0;
+  let unlocked = 0;
+  let locked = 0;
+  let updatedChallenges = 0;
+
+  entries.forEach((entry) => {
+    const teamId = String(entry.teamId);
+    const team = game.teams.find((item) => String(item.teamId) === teamId);
+    if (!team) throw apiError_("TEAM_NOT_FOUND", `找不到小隊：${teamId}`, 404);
+
+    const rosterUpdates = Array.isArray(entry.rosterUpdates) ? entry.rosterUpdates : [];
+    const lineupUpdates = Array.isArray(entry.lineupUpdates) ? entry.lineupUpdates : [];
+    const rosterNames = rosterUpdates.map((update) => String(update.petName || ""));
+    if (rosterNames.some((name) => !name) || new Set(rosterNames).size !== rosterNames.length) throw apiError_("INVALID_ROSTER_UPDATE", `第 ${teamId} 小隊角色名稱不可為空或重複`, 400);
+    const lineupIds = lineupUpdates.map((update) => String(update.challengeId || ""));
+    if (lineupIds.some((id) => !id) || new Set(lineupIds).size !== lineupIds.length) throw apiError_("INVALID_LINEUP", `第 ${teamId} 小隊關卡資料不可為空或重複`, 400);
+
+    const rosterByName = new Map(rosterRows.filter((pet) => String(pet.teamId) === teamId).map((pet) => [String(pet.petName), pet]));
+    const finalLevels = {};
+    rosterByName.forEach((pet, petName) => finalLevels[petName] = Number(pet.level) || 0);
+    rosterUpdates.forEach((update) => {
+      const petName = String(update.petName);
+      const pet = rosterByName.get(petName);
+      const expectedVersion = pet ? (Number(pet.version) || 1) : 0;
+      if (Number(update.version) !== expectedVersion) throw apiError_("VERSION_CONFLICT", `角色「${petName}」已被更新`, 409);
+      finalLevels[petName] = Math.max(0, Math.min(MAX_LEVEL, Math.floor(Number(update.level) || 0)));
+    });
+
+    const kinds = roundKinds_(game.round);
+    const finalLineupsByChallenge = {};
+    kinds.forEach((kind, index) => {
+      const challengeId = challengeId_(game.round, index, kind);
+      const slotCount = kind === "duo" ? DUO_CONTRIBUTION_SIZE : SINGLE_TEAM_SIZE;
+      finalLineupsByChallenge[challengeId] = getLineupSlots_(team.currentLineups, challengeId, slotCount);
+    });
+
+    lineupUpdates.forEach((update) => {
+      const challengeId = String(update.challengeId);
+      const kindIndex = kinds.findIndex((kind, index) => challengeId_(game.round, index, kind) === challengeId);
+      if (kindIndex < 0 || !Array.isArray(update.lineup)) throw apiError_("INVALID_LINEUP", `第 ${teamId} 小隊陣容資料格式錯誤`, 400);
+      const expectedSize = kinds[kindIndex] === "duo" ? DUO_CONTRIBUTION_SIZE : SINGLE_TEAM_SIZE;
+      if (update.lineup.length !== expectedSize) throw apiError_("INVALID_LINEUP", `第 ${teamId} 小隊陣容格數錯誤`, 400);
+      finalLineupsByChallenge[challengeId] = update.lineup.map((name) => name ? String(name) : "");
+    });
+
+    const usedNames = new Set();
+    Object.keys(finalLineupsByChallenge).forEach((challengeId) => {
+      const selected = finalLineupsByChallenge[challengeId].filter(Boolean).map(String);
+      if (new Set(selected).size !== selected.length) throw apiError_("INVALID_LINEUP", `第 ${teamId} 小隊陣容包含重複角色`, 400);
+      selected.forEach((name) => {
+        if (usedNames.has(name)) throw apiError_("INVALID_LINEUP", `第 ${teamId} 小隊有角色重複用於不同關卡`, 400);
+        usedNames.add(name);
+      });
+    });
+
+    rosterUpdates.forEach((update) => {
+      const petName = String(update.petName);
+      if ((finalLevels[petName] || 0) <= 0 && usedNames.has(petName)) throw apiError_("ROSTER_IN_USE", `角色「${petName}」仍在本回合陣容中，不能鎖定`, 400);
+    });
+
+    const owned = new Set(Object.keys(finalLevels).filter((petName) => (Number(finalLevels[petName]) || 0) > 0));
+    const consumed = new Set((team.roster || []).filter(isConsumedOncePet_).map((pet) => String(pet.petName)));
+    lineupUpdates.forEach((update) => {
+      const challengeId = String(update.challengeId);
+      const selected = finalLineupsByChallenge[challengeId].filter(Boolean).map(String);
+      if (selected.some((name) => !owned.has(name))) throw apiError_("INVALID_LINEUP", `第 ${teamId} 小隊陣容包含未解鎖角色`, 400);
+      if (selected.some((name) => consumed.has(name))) throw apiError_("PET_ALREADY_DEPLOYED", `第 ${teamId} 小隊陣容包含已出戰過的一次性角色`, 400);
+      const previous = lineupRows.filter((row) => String(row.teamId) === teamId && Number(row.round) === game.round && String(row.challengeId) === challengeId);
+      const currentVersion = Math.max(0, ...previous.map((row) => Number(row.version) || 0));
+      if (Number(update.version || 0) !== currentVersion) throw apiError_("VERSION_CONFLICT", `第 ${teamId} 小隊陣容已被其他分頁更新`, 409);
+      const nextVersion = currentVersion + 1;
+      finalLineupsByChallenge[challengeId].forEach((name, slotIndex) => {
+        newLineupRows.push([game.round, challengeId, teamId, slotIndex, name || "", nextVersion, now]);
+      });
+      updatedChallenges += 1;
+    });
+
+    rosterUpdates.forEach((update) => {
+      const petName = String(update.petName);
+      const pet = rosterByName.get(petName);
+      const level = Number(finalLevels[petName]) || 0;
+      if (!pet && level > 0) {
+        newRosterRows.push([teamId, petName, level, 0, 1]);
+        unlocked += 1;
+        updatedPets += 1;
+      } else if (pet) {
+        const previousLevel = Number(pet.level) || 0;
+        existingWrites.push({
+          rowNumber: pet._rowNumber,
+          values: [level, Number(pet.gameRoundsDeployed) || 0, (Number(pet.version) || 1) + 1],
+        });
+        if (previousLevel <= 0 && level > 0) unlocked += 1;
+        if (previousLevel > 0 && level <= 0) locked += 1;
+        if (previousLevel !== level) updatedPets += 1;
+      }
+    });
+  });
+
+  existingWrites.sort((a, b) => a.rowNumber - b.rowNumber);
+  for (let index = 0; index < existingWrites.length;) {
+    const start = index;
+    let end = index + 1;
+    while (end < existingWrites.length && existingWrites[end].rowNumber === existingWrites[end - 1].rowNumber + 1) end += 1;
+    rosterSheet.getRange(existingWrites[start].rowNumber, 3, end - start, 3)
+      .setValues(existingWrites.slice(start, end).map((write) => write.values));
+    index = end;
+  }
+  appendRows_(SHEETS.roster, newRosterRows);
+  appendRows_(SHEETS.lineups, newLineupRows);
+  return { updatedPets, unlocked, locked, updatedChallenges, teams: entries.length };
 }
 
 function autoConfigureAllLineups_(payload) {

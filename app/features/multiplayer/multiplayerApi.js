@@ -100,6 +100,7 @@ export function createMultiplayerApi(fetchImpl = fetch) {
       })));
       return request(fetchImpl, "saveOfficialRound", { ...payload, battles });
     },
+    saveWorkerDrafts(payload) { return request(fetchImpl, "saveWorkerDrafts", payload); },
     updateRosterLevels(payload) { return request(fetchImpl, "updateRosterLevels", payload); },
     saveWorkerLineup(payload) { return request(fetchImpl, "saveWorkerLineup", payload); },
     autoConfigureAllLineups(payload) { return request(fetchImpl, "autoConfigureAllLineups", payload); },

@@ -10,6 +10,9 @@ export default function TeamSection({
   companionTeams = [],
   companionLabels = [],
   companionPlacements = [],
+  subtitle,
+  modeActions = [],
+  editableTeamIndexes = null,
   isReadOnlyView = false,
   draggedItem,
   dragHoverTarget = null,
@@ -26,6 +29,7 @@ export default function TeamSection({
   const interactionLocked = isReadOnlyView;
   const rows = teams ?? [team];
   const [mobileRowIndex, setMobileRowIndex] = useState(0);
+  const editableIndexSet = editableTeamIndexes ? new Set(editableTeamIndexes) : null;
 
   useEffect(() => {
     setMobileRowIndex((current) => Math.min(current, Math.max(0, rows.length - 1)));
@@ -54,16 +58,43 @@ export default function TeamSection({
         ) : null}
         {!interactionLocked && (onAutoConfigureTeam || onOptimalConfigureTeam || onRandomConfigureTeam) ? (
           <div className="team-configure-actions">
+            {modeActions.map((action) => (
+              <button
+                type="button"
+                className={`ghost-button team-auto-configure-button${action.active ? " is-active" : ""}`}
+                onClick={action.onClick}
+                disabled={action.disabled}
+                key={action.id ?? action.label}
+              >
+                {action.label}
+              </button>
+            ))}
             {onAutoConfigureTeam ? <button type="button" className="ghost-button team-auto-configure-button" onClick={onAutoConfigureTeam} disabled={autoConfigureDisabled}>一鍵組隊</button> : null}
             {onOptimalConfigureTeam ? <button type="button" className="ghost-button team-auto-configure-button" onClick={onOptimalConfigureTeam} disabled={optimalConfigureDisabled}>最優組隊</button> : null}
             {onRandomConfigureTeam ? <button type="button" className="ghost-button team-auto-configure-button" onClick={onRandomConfigureTeam}>隨機組隊</button> : null}
           </div>
+        ) : !interactionLocked && modeActions.length ? (
+          <div className="team-configure-actions">
+            {modeActions.map((action) => (
+              <button
+                type="button"
+                className={`ghost-button team-auto-configure-button${action.active ? " is-active" : ""}`}
+                onClick={action.onClick}
+                disabled={action.disabled}
+                key={action.id ?? action.label}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
         ) : null}
       </div>
+      {subtitle ? <p className="panel-subtitle team-panel-subtitle">{subtitle}</p> : null}
       {rows.map((row, rowIndex) => {
         const challenge = challenges[rowIndex];
         const label = challenge?.label ?? (rows.length > 1 ? `隊伍 ${rowIndex + 1}` : "上場隊伍");
         const companionTeam = companionTeams[rowIndex];
+        const editable = !editableIndexSet || editableIndexSet.has(rowIndex);
         const companionCards = companionTeam?.map((pet, index) => pet ? (
           <div className="team-slot team-slot--companion" key={`companion-${rowIndex}-${index}`}>
             <GameCard data={pet} showLevel qualityVisibility="never" showQualityInTooltip formatDisplayName={formatDisplayName} itemIcons={itemIcons} StatIcon={StatIcon} />
@@ -101,6 +132,7 @@ export default function TeamSection({
                     key={`slot-${rowIndex}-${index}`}
                     data-team-slot-index={index}
                     className={`team-slot ${
+                      editable &&
                       !interactionLocked &&
                       draggedItem &&
                       draggedItem.source === "collection"
@@ -120,7 +152,7 @@ export default function TeamSection({
                           dragHoverTarget?.slotIndex === index
                         }
                         onPointerDown={
-                          interactionLocked
+                          interactionLocked || !editable
                             ? undefined
                             : (event) => onPointerDownTeamPet(rowIndex, index, event)
                         }

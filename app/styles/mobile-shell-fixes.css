@@ -251,7 +251,8 @@
   }
 
   .mobile-shell-view--team .mobile-team-row-tabs button,
-  .mobile-shell-view--team .team-auto-configure-button {
+  .mobile-shell-view--team .team-auto-configure-button,
+  .mobile-shell-view--team .collection-mode-action .collection-sort-button {
     min-height: 27px;
     padding: 3px 6px;
     border: 1px solid #bfdbfe;
@@ -272,6 +273,12 @@
     margin-left: 3px;
     color: inherit;
     font-size: .55rem;
+  }
+
+  .mobile-shell-view--team .collection-mode-action {
+    display: flex;
+    justify-content: flex-start;
+    margin-left: auto;
   }
 
   .mobile-shell-view--team .team-row--mobile-hidden {
@@ -412,6 +419,8 @@
 
   .mobile-shell-view--team .team-row-heading,
   .mobile-shell-view--team .panel-subtitle,
+  .mobile-shell-view--team .team-panel-subtitle,
+  .mobile-shell-view--team .collection-panel .panel-subtitle,
   .mobile-shell-view--team .collection-tag-filter,
   .mobile-shell-view--team .collection-toolbar,
   .mobile-shell-view--team .collection-card-state,

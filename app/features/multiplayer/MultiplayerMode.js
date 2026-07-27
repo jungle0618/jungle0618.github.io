@@ -49,6 +49,7 @@ export default function MultiplayerMode({ onBack }) {
   const [session, setSession] = useState(null);
   const [game, setGame] = useState(null);
   const [teams, setTeams] = useState([]);
+  const [pairingTeams, setPairingTeams] = useState([]);
   const [gamePhase, setGamePhase] = useState("prepare");
   const [battleReplay, setBattleReplay] = useState(null);
   const [battleReplays, setBattleReplays] = useState([]);
@@ -60,6 +61,7 @@ export default function MultiplayerMode({ onBack }) {
   const [compendiumPet, setCompendiumPet] = useState(null);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [enemyScheduleOpen, setEnemyScheduleOpen] = useState(false);
+  const [teamEditMode, setTeamEditMode] = useState("standard");
   const { draggedItem, pointerDragGhost, dragHoverTarget, startPointerDrag, clearDragging } = usePointerDrag();
 
   useEffect(() => {
@@ -76,27 +78,59 @@ export default function MultiplayerMode({ onBack }) {
   }, [overviewOpen]);
 
   const challenges = useMemo(() => playerChallenges(game?.round ?? 1), [game?.round]);
+  const duoChallengeIndexes = useMemo(() => challenges
+    .map((challenge, index) => challenge.kind === "duo" ? index : null)
+    .filter((index) => index !== null), [challenges]);
+  const hasPairingMode = duoChallengeIndexes.length > 0 && Boolean(game?.duoPartner);
   const ownTeam = game?.teams?.find((team) => team.teamId === String(session?.teamId));
   const roster = useMemo(() => hydrateMultiplayerRoster(ownTeam?.roster ?? []), [ownTeam?.roster]);
+  const partnerRoster = useMemo(() => hydrateMultiplayerRoster(game?.duoPartner?.roster ?? []), [game?.duoPartner?.roster]);
   const viewerIsHigher = useMemo(() => isHigherRankTeamInPairing(
     game,
     session?.teamId,
     game?.duoPartner?.teamId
   ), [game, session?.teamId]);
-  const companionTeams = useMemo(() => {
+  const partnerSavedTeams = useMemo(() => {
     if (!game?.duoPartner) return challenges.map(() => null);
-    const partnerRoster = hydrateMultiplayerRoster(game.duoPartner.roster ?? []);
     return challenges.map((challenge) => challenge.kind === "duo"
       ? savedLineupForChallenge(game.duoPartner.currentLineups ?? [], challenge, partnerRoster)
       : null);
-  }, [challenges, game?.duoPartner]);
-  const companionLabels = useMemo(() => challenges.map((challenge) => {
+  }, [challenges, game?.duoPartner, partnerRoster]);
+  const standardCompanionLabels = useMemo(() => challenges.map((challenge) => {
     if (challenge.kind !== "duo" || !game?.duoPartner) return null;
     return `${multiplayerTeamName(game.duoPartner)}的三格（${viewerIsHigher ? "聯隊後排" : "聯隊前排"}・唯讀）`;
   }), [challenges, game?.duoPartner, viewerIsHigher]);
-  const companionPlacements = useMemo(() => challenges.map((challenge) =>
+  const standardCompanionPlacements = useMemo(() => challenges.map((challenge) =>
     challenge.kind === "duo" && game?.duoPartner && viewerIsHigher ? "before" : "after"
   ), [challenges, game?.duoPartner, viewerIsHigher]);
+  const pairDisplayTeams = useMemo(() => challenges.map((challenge, index) =>
+    challenge.kind === "duo" ? (pairingTeams[index] ?? partnerSavedTeams[index]) : (teams[index] ?? [])
+  ), [challenges, pairingTeams, partnerSavedTeams, teams]);
+  const pairCompanionTeams = useMemo(() => challenges.map((challenge, index) =>
+    challenge.kind === "duo" ? (teams[index] ?? []) : null
+  ), [challenges, teams]);
+  const pairCompanionLabels = useMemo(() => challenges.map((challenge) => {
+    if (challenge.kind !== "duo" || !ownTeam) return null;
+    return `${multiplayerTeamName(ownTeam)}的三格（${viewerIsHigher ? "聯隊前排" : "聯隊後排"}・唯讀）`;
+  }), [challenges, ownTeam, viewerIsHigher]);
+  const pairCompanionPlacements = useMemo(() => challenges.map((challenge) =>
+    challenge.kind === "duo" && game?.duoPartner && viewerIsHigher ? "after" : "before"
+  ), [challenges, game?.duoPartner, viewerIsHigher]);
+  const displayTeams = teamEditMode === "pair" ? pairDisplayTeams : teams;
+  const displayCompanionTeams = teamEditMode === "pair"
+    ? pairCompanionTeams
+    : challenges.map((challenge, index) => challenge.kind === "duo" ? (pairingTeams[index] ?? partnerSavedTeams[index]) : null);
+  const displayCompanionLabels = teamEditMode === "pair" ? pairCompanionLabels : standardCompanionLabels;
+  const displayCompanionPlacements = teamEditMode === "pair" ? pairCompanionPlacements : standardCompanionPlacements;
+  const editableTeamIndexes = useMemo(() => (
+    teamEditMode === "pair"
+      ? duoChallengeIndexes
+      : challenges.map((_, index) => index)
+  ), [challenges, duoChallengeIndexes, teamEditMode]);
+  const activeTeams = teamEditMode === "pair" ? pairingTeams : teams;
+  const setActiveTeams = teamEditMode === "pair" ? setPairingTeams : setTeams;
+  const collectionTeams = useMemo(() => editableTeamIndexes.map((index) => activeTeams[index] ?? []), [activeTeams, editableTeamIndexes]);
+  const activeCollection = teamEditMode === "pair" ? partnerRoster : roster;
   const cardProps = useMemo(() => ({ formatDisplayName, itemIcons: ITEM_ICONS, StatIcon, showPersistentProgress: true }), []);
 
   const loadGame = useCallback(async () => {
@@ -111,9 +145,19 @@ export default function MultiplayerMode({ onBack }) {
   useEffect(() => {
     if (!game || !ownTeam) return;
     const nextRoster = hydrateMultiplayerRoster(ownTeam.roster ?? []);
+    const nextPartnerRoster = hydrateMultiplayerRoster(game.duoPartner?.roster ?? []);
     const nextChallenges = playerChallenges(game.round);
-    setTeams(nextChallenges.map((challenge) => savedLineupForChallenge(ownTeam.currentLineups ?? [], challenge, nextRoster)));
+    const nextTeams = nextChallenges.map((challenge) => savedLineupForChallenge(ownTeam.currentLineups ?? [], challenge, nextRoster));
+    const nextPairingTeams = nextChallenges.map((challenge) => challenge.kind === "duo"
+      ? savedLineupForChallenge(game.duoPartner?.currentLineups ?? [], challenge, nextPartnerRoster)
+      : []);
+    setTeams(nextTeams);
+    setPairingTeams(nextPairingTeams);
   }, [game, ownTeam]);
+
+  useEffect(() => {
+    if (teamEditMode === "pair" && !hasPairingMode) setTeamEditMode("standard");
+  }, [hasPairingMode, teamEditMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,16 +173,17 @@ export default function MultiplayerMode({ onBack }) {
 
   const { onDropToSlot } = useTeamSelectionActions({
     gamePhase,
-    teams,
-    setTeams,
+    teams: activeTeams,
+    setTeams: setActiveTeams,
     setStatusSuccess: setStatus,
     notifyLineupChanges: false,
+    canEditTeamIndex: (teamIndex) => editableTeamIndexes.includes(teamIndex),
     clearDragging,
   });
 
   function onPointerDownTeamPet(teamIndex, slotIndex, event) {
-    if (busy || !teams[teamIndex]?.[slotIndex]) return;
-    startPointerDrag({ source: "team", teamIndex, slotIndex, data: teams[teamIndex][slotIndex] }, event, { onDropToSlot, onTap: ({ data }) => setCompendiumPet(data) });
+    if (busy || !editableTeamIndexes.includes(teamIndex) || !activeTeams[teamIndex]?.[slotIndex]) return;
+    startPointerDrag({ source: "team", teamIndex, slotIndex, data: activeTeams[teamIndex][slotIndex] }, event, { onDropToSlot, onTap: ({ data }) => setCompendiumPet(data) });
   }
 
   function onPointerDownCollectionPet(pet, event) {
@@ -150,7 +195,7 @@ export default function MultiplayerMode({ onBack }) {
     clearDragging();
     const configured = configureTeamsFromCollection(roster, challenges, random);
     setTeams(configured);
-    setStatus(random ? "已從自己的角色池隨機組隊；未使用雙人關隊友角色" : "已從自己的角色池依等級一鍵組隊；未使用雙人關隊友角色");
+    setStatus(random ? "已從自己的角色池隨機組隊" : "已從自己的角色池依等級一鍵組隊");
   }
 
   function randomConfigureTeams() {
@@ -171,7 +216,7 @@ export default function MultiplayerMode({ onBack }) {
   }
 
   async function logout() {
-    await api.logout(); setSession(null); setGame(null); setTeams([]);
+    await api.logout(); setSession(null); setGame(null); setTeams([]); setPairingTeams([]);
   }
 
   async function saveLineups() {
@@ -200,12 +245,13 @@ export default function MultiplayerMode({ onBack }) {
   function testBattles() {
     clearDragging();
     const replays = challenges.flatMap((challenge, index) => {
-      const playerTeam = compactTeamToRight(teams[index] ?? [], challenge.teamSize);
+      const ownChallengeTeam = compactTeamToRight(teams[index] ?? [], challenge.teamSize);
+      const partnerChallengeTeam = compactTeamToRight((pairingTeams[index] ?? partnerSavedTeams[index] ?? []), challenge.teamSize);
       const battleTeam = challenge.kind === "duo"
         ? (viewerIsHigher
-            ? buildDuoLineup(companionTeams[index] ?? [], playerTeam)
-            : buildDuoLineup(playerTeam, companionTeams[index] ?? []))
-        : playerTeam;
+            ? buildDuoLineup(partnerChallengeTeam, ownChallengeTeam)
+            : buildDuoLineup(ownChallengeTeam, partnerChallengeTeam))
+        : ownChallengeTeam;
       const challengeReplays = Array.from({ length: challenge.maxBossLevel }, (_, levelIndex) => {
         const level = levelIndex + 1;
         const result = runBattle(
@@ -291,14 +337,51 @@ export default function MultiplayerMode({ onBack }) {
   return (
     <GameShell
       phase={gamePhase}
-      headerProps={{ round: game.round, maxRound: MAX_ROUND, totalScore: ownTeam?.score ?? 0 }}
-      teamProps={{ teams, challenges, companionTeams, companionLabels, companionPlacements, isReadOnlyView: busy, draggedItem, dragHoverTarget, onPointerDownTeamPet, onAutoConfigureTeam: () => autoConfigureTeams(), onRandomConfigureTeam: randomConfigureTeams }}
-      collectionProps={{ collection: roster, teams, isReadOnlyView: busy, draggedItem, isDragHover: Boolean(draggedItem?.source === "team" && dragHoverTarget?.collection), onPointerDownCollectionPet }}
+      headerProps={{
+        round: game.round,
+        maxRound: MAX_ROUND,
+        totalScore: ownTeam?.score ?? 0,
+        title: "多人模式",
+        subtitle: ownTeam ? `目前隊伍：${multiplayerTeamName(ownTeam)}` : "",
+      }}
+      teamProps={{
+        teams: displayTeams,
+        challenges,
+        companionTeams: displayCompanionTeams,
+        companionLabels: displayCompanionLabels,
+        companionPlacements: displayCompanionPlacements,
+        editableTeamIndexes,
+        isReadOnlyView: busy,
+        draggedItem,
+        dragHoverTarget,
+        onPointerDownTeamPet,
+        onAutoConfigureTeam: teamEditMode === "standard" ? () => autoConfigureTeams() : undefined,
+        onRandomConfigureTeam: teamEditMode === "standard" ? randomConfigureTeams : undefined,
+      }}
+      collectionProps={{
+        collection: activeCollection,
+        teams: collectionTeams,
+        isReadOnlyView: busy,
+        draggedItem,
+        isDragHover: Boolean(draggedItem?.source === "team" && dragHoverTarget?.collection),
+        onPointerDownCollectionPet,
+        title: hasPairingMode && teamEditMode === "pair" ? `${multiplayerTeamName(game?.duoPartner ?? {})}的角色池` : "角色池",
+        action: hasPairingMode ? {
+          label: teamEditMode === "pair" ? "切換回自己的角色池" : `切換到${multiplayerTeamName(game?.duoPartner ?? {})}的角色池`,
+          onClick: () => setTeamEditMode((current) => current === "pair" ? "standard" : "pair"),
+          disabled: busy,
+        } : null,
+        subtitle: hasPairingMode
+          ? (teamEditMode === "pair"
+              ? "此角色池只能放到雙人關的自己三格。"
+              : "此角色池不能放到雙人關；切到 Pair 模式才可覆蓋雙人關三格。")
+          : undefined,
+      }}
       battleProps={{ battleReplay, battleReplays, onSelectReplay: (replay) => { setBattleReplay(replay); setBossLevel(replay.bossLevel); } }}
       encounterProps={{ encounter: selectedChallenge?.encounter, monsters: selectedChallenge ? buildChallengeEncounterTeam(selectedChallenge, bossLevel) : [], score: battleReplay?.score, bossLevel, challenges: challengePanels, onSelectMonster: setCompendiumPet }}
       prepareActions={[
         { id: "test", label: "測試戰鬥", onClick: testBattles, disabled: busy },
-        { id: "save", label: busyAction === "save" ? "儲存中…" : "儲存陣容", onClick: saveLineups, disabled: busy, active: busyAction === "save", primary: true },
+        { id: "save", label: busyAction === "save" ? "儲存中…" : "儲存陣容", onClick: saveLineups, disabled: busy, active: busyAction === "save" },
         { id: "refresh", label: busyAction === "refresh" ? "讀取中…" : "重新整理", onClick: refreshGame, disabled: busy, active: busyAction === "refresh", primary: false },
       ]}
       battleActions={{ secondary: { label: "返回編隊", onClick: returnToPreparation } }}

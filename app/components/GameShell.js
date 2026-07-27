@@ -153,6 +153,7 @@ export default function GameShell({
                     className={`save-button ${isPrimary ? "primary-bottom-button" : "retry-bottom-button"}${action.active ? " is-pending" : ""}`}
                     onClick={action.onClick}
                     disabled={action.disabled}
+                    data-action-id={action.id}
                     data-guided-target={action.guidedTarget}
                   >
                     {action.icon ?? null}

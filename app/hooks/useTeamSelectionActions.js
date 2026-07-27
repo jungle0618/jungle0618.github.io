@@ -11,10 +11,18 @@ export default function useTeamSelectionActions({
   setTeams,
   setStatusSuccess,
   notifyLineupChanges = true,
+  canEditTeamIndex = () => true,
   clearDragging,
 }) {
   const onDropToSlot = useCallback((target, payload) => {
     if (gamePhase !== "prepare" || !target || !payload) {
+      clearDragging();
+      return;
+    }
+
+    const sourceTeamIndex = payload.source === "team" ? payload.teamIndex : null;
+    const targetTeamIndex = target.zone === "team" ? target.teamIndex : null;
+    if ((sourceTeamIndex !== null && !canEditTeamIndex(sourceTeamIndex)) || (targetTeamIndex !== null && !canEditTeamIndex(targetTeamIndex))) {
       clearDragging();
       return;
     }
@@ -64,7 +72,7 @@ export default function useTeamSelectionActions({
       if (notifyLineupChanges) setStatusSuccess("已調整上場順序");
     }
     clearDragging();
-  }, [gamePhase, team, teams, setTeam, setTeams, setStatusSuccess, notifyLineupChanges, clearDragging]);
+  }, [gamePhase, team, teams, setTeam, setTeams, setStatusSuccess, notifyLineupChanges, canEditTeamIndex, clearDragging]);
 
   return { onDropToSlot };
 }

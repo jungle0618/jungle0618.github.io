@@ -21,6 +21,7 @@ export default function CollectionSection({
   onPointerDownCollectionPet,
   title = "角色池",
   subtitle,
+  action,
   formatDisplayName,
   itemIcons,
   StatIcon,
@@ -55,6 +56,18 @@ export default function CollectionSection({
     >
       <div className="collection-panel-heading">
         <h2 className="panel-title">{title}</h2>
+        {action ? (
+          <div className="collection-mode-action">
+            <button
+              type="button"
+              className="collection-sort-button"
+              onClick={action.onClick}
+              disabled={action.disabled}
+            >
+              {action.label}
+            </button>
+          </div>
+        ) : null}
         <div className="collection-toolbar">
           <span className="collection-count">可用 {availablePets.length}／共 {collection.length}</span>
           <button
