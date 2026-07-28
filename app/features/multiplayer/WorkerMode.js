@@ -8,13 +8,14 @@ import MultiplayerBusyOverlay from "./MultiplayerBusyOverlay";
 import PetCompendiumLauncher from "../../components/PetCompendiumLauncher";
 import BattleSection from "../../components/BattleSection";
 import { calculateOfficialRound, getOfficialLineupVersions } from "./officialRound";
+import { estimateWorkerStrategies } from "./workerStrategyAdvisor";
 import { hydrateMultiplayerRoster, serializeLineup } from "./multiplayerAdapter";
 import { getChallengeLabel, getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../../lib/challengeConfig";
 import { ITEM_ICONS } from "../../lib/assetConfig";
 import { DRAW_CARDS, INITIAL_ROUND_POOL_NAMES, MAX_LEVEL_GAP, MAX_PET_LEVEL, MAX_ROUND } from "../../lib/gameConfig";
 import { formatDisplayName, getPetCompendiumList } from "../../lib/petCatalog";
 import { configureTeamsFromCollection } from "../../lib/lineupLogic";
-import { canDrawPetAtRound } from "../../lib/cardDrawLogic";
+import { applyDrawsToCollection, canDrawPetAtRound, drawPetCards } from "../../lib/cardDrawLogic";
 import { ONCE_PER_GAME_PET_NAMES } from "../../lib/characterConfig";
 import StatIcon from "../../components/StatIcon";
 import EnemyScheduleDialog from "../../components/EnemyScheduleDialog";
@@ -66,6 +67,23 @@ function levelRangeFromDraft(draftLevels) {
   const unlockedLevels = Object.values(draftLevels).map((value) => Number(value) || 0).filter((value) => value > 0);
   if (!unlockedLevels.length) return 0;
   return Math.max(...unlockedLevels) - Math.min(...unlockedLevels);
+}
+
+function buildCollectionFromDraft(team, allPets, draftLevels) {
+  const rosterByName = new Map((team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet]));
+  return allPets
+    .map((pet) => {
+      const level = Number(draftLevels[pet.name]) || 0;
+      if (level <= 0) return null;
+      const base = rosterByName.get(pet.name) ?? {};
+      return {
+        ...pet,
+        level,
+        gameRoundsDeployed: Number(base.gameRoundsDeployed) || 0,
+        version: Number(base.version) || 0,
+      };
+    })
+    .filter(Boolean);
 }
 
 function summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamLineupDrafts) {
@@ -226,6 +244,65 @@ function WorkerAllLineupsDialog({ game, busy, onClose }) {
   );
 }
 
+function formatStrategyLineup(names = []) {
+  const selected = names.filter(Boolean);
+  return selected.length ? selected.join(" / ") : "空格";
+}
+
+function WorkerStrategySection({ results, progress, busy, onRun }) {
+  return (
+    <section className="mode-panel worker-strategy-panel">
+      <div className="worker-strategy-panel__header">
+        <div>
+          <h2>本回合策略差距估算</h2>
+          <p>使用前端演化演算法估計每隊本回合最佳策略。實際隊伍照目前陣容原樣評估，包含一次性傳奇卡；估計最佳則排除一次性角色。差距 = 估計最佳總通關層數 - 實際總通關層數，因此可能是負數。雙人關會固定隊友目前陣容，只優化本隊自己的 3 格。</p>
+        </div>
+        <button type="button" className="worker-lineup-save" onClick={onRun} disabled={busy}>
+          {busy ? "估算中…" : "估算所有隊伍最佳策略"}
+        </button>
+      </div>
+      {progress ? <p className="worker-strategy-panel__progress">進度：{progress.completed} / {progress.total}，目前第 {progress.teamId} 小隊</p> : null}
+      {results.length ? (
+        <div className="worker-strategy-table-wrap">
+          <table className="worker-strategy-table">
+            <thead>
+              <tr>
+                  <th>隊伍</th>
+                  <th>實際</th>
+                  <th>估計最佳</th>
+                  <th>差距(best-actual)</th>
+                  <th>關卡明細</th>
+                </tr>
+              </thead>
+            <tbody>
+              {results.map((result) => (
+                <tr key={result.teamId}>
+                  <th>#{result.rank || "—"} {result.teamName || `第 ${result.teamId} 小隊`}</th>
+                  <td>{result.actual.totalCleared}</td>
+                  <td>{result.best.totalCleared}</td>
+                  <td className={result.gap > 0 ? "is-gap-positive" : result.gap < 0 ? "is-gap-negative" : ""}>{result.gap}</td>
+                  <td className="worker-strategy-table__detail">
+                    {result.best.details.map((item) => {
+                      const actual = result.actual.details.find((entry) => entry.challengeId === item.challengeId);
+                      return (
+                        <div key={item.challengeId} className="worker-strategy-detail">
+                          <strong>{item.challengeName}</strong>
+                          <span>實際 {actual?.highestCleared ?? 0} 層：{formatStrategyLineup(actual?.lineupNames ?? [])}</span>
+                          <span>最佳 {item.highestCleared} 層：{formatStrategyLineup(item.lineupNames ?? [])}</span>
+                        </div>
+                      );
+                    })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export default function WorkerMode({ onBack }) {
   const api = useMemo(() => createMultiplayerApi(), []);
   const [session, setSession] = useState(null);
@@ -245,6 +322,10 @@ export default function WorkerMode({ onBack }) {
   const [bossLevel, setBossLevel] = useState(1);
   const [teamLevelDrafts, setTeamLevelDrafts] = useState({});
   const [teamLineupDrafts, setTeamLineupDrafts] = useState({});
+  const [strategyBusy, setStrategyBusy] = useState(false);
+  const [strategyProgress, setStrategyProgress] = useState(null);
+  const [strategyResults, setStrategyResults] = useState([]);
+  const [selectedTeamDrawCount, setSelectedTeamDrawCount] = useState(DRAW_CARDS);
   const allPets = useMemo(() => getPetCompendiumList().slice().sort((a, b) =>
     (Number(b.tier) || 1) - (Number(a.tier) || 1) || String(a.name).localeCompare(String(b.name), "zh-Hant")
   ), []);
@@ -300,6 +381,8 @@ export default function WorkerMode({ onBack }) {
     setGame(nextGame);
     setTeamLevelDrafts({});
     setTeamLineupDrafts({});
+    setStrategyResults([]);
+    setStrategyProgress(null);
   }, [api]);
   useEffect(() => {
     let cancelled = false;
@@ -333,6 +416,10 @@ export default function WorkerMode({ onBack }) {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [busy, selectedTeamId]);
+
+  useEffect(() => {
+    setSelectedTeamDrawCount(DRAW_CARDS);
+  }, [selectedTeamId]);
 
   async function login({ accountId, password }) {
     setBusy(true); setBusyAction("login");
@@ -429,24 +516,31 @@ export default function WorkerMode({ onBack }) {
     } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
   }
 
-  async function drawSelectedTeamRoster(teamId) {
+  function drawSelectedTeamRoster(teamId, cardCount) {
     if (game.round === 1) {
       setError("第 1 回合不抽卡；請改用固定初始 10 張規則");
       return;
     }
-    if (!window.confirm(`確定要讓第 ${teamId} 小隊自動抽 ${DRAW_CARDS} 張卡片嗎？`)) return;
-    setBusy(true); setBusyAction("draw-one"); setError(null); setStatus(null);
-    try {
-      const result = await api.drawRosters({
-        cardCount: DRAW_CARDS,
-        teamIds: [String(teamId)],
-        eligiblePetNames: getPetCompendiumList()
-          .filter((pet) => pet.tier < 4 && canDrawPetAtRound(pet, game.round))
-          .map((pet) => pet.name),
-      });
-      await loadGame();
-      setStatus(`第 ${result.round} 回合已替第 ${teamId} 小隊自動抽 ${result.cardCount} 張卡片`);
-    } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }
+    const normalizedTeamId = String(teamId);
+    const team = (game?.teams ?? []).find((item) => String(item.teamId) === normalizedTeamId);
+    const drawCount = Math.max(1, Math.floor(Number(cardCount) || 0));
+    if (!team || drawCount <= 0) return;
+    setError(null);
+    setStatus(null);
+    const baseDraft = teamLevelDrafts[normalizedTeamId] ?? createRosterLevelDraft(team, allPets);
+    const collection = buildCollectionFromDraft(team, allPets, baseDraft);
+    const draws = drawPetCards(game.round, drawCount, Number(teamId), Number(game.version) || 0)
+      .filter((pet) => pet.tier < 4 && canDrawPetAtRound(pet, game.round));
+    const nextCollection = applyDrawsToCollection(collection, draws);
+    const nextDraft = Object.fromEntries(allPets.map((pet) => [
+      pet.name,
+      nextCollection.find((entry) => entry.name === pet.name)?.level ?? 0,
+    ]));
+    setTeamLevelDrafts((current) => ({
+      ...current,
+      [normalizedTeamId]: nextDraft,
+    }));
+    setStatus(`已在前端草稿替第 ${teamId} 小隊模擬抽 ${drawCount} 張卡片；尚未儲存到 Google Sheet`);
   }
 
   async function setInitialRostersForAllTeams() {
@@ -582,6 +676,28 @@ export default function WorkerMode({ onBack }) {
     finally { setBusy(false); setBusyAction(null); }
   }
 
+  async function analyzeCurrentRoundStrategies() {
+    if (!game) return;
+    setStrategyBusy(true);
+    setStrategyProgress({ completed: 0, total: game.teams.length, teamId: "—" });
+    setError(null);
+    try {
+      const results = await estimateWorkerStrategies(game, {
+        teamLevelDrafts,
+        teamLineupDrafts,
+        allPets,
+        onProgress: setStrategyProgress,
+      });
+      setStrategyResults(results);
+      setStatus(`已完成第 ${game.round} 回合 ${results.length} 個小隊的策略差距估算`);
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setStrategyBusy(false);
+      setStrategyProgress(null);
+    }
+  }
+
   async function openHistory(battles, historyGroup) {
     setBusy(true); setBusyAction("history"); setError(null);
     try {
@@ -700,6 +816,7 @@ export default function WorkerMode({ onBack }) {
               {busyAction === "save-all" ? "儲存中…" : hasPendingChanges ? "儲存所有暫存變更" : "目前沒有待儲存變更"}
             </button>
           </section>
+          <WorkerStrategySection results={strategyResults} progress={strategyProgress} busy={strategyBusy} onRun={analyzeCurrentRoundStrategies} />
         </>
       )}
       {selectedTeamId ? (
@@ -716,9 +833,19 @@ export default function WorkerMode({ onBack }) {
               <section className="worker-team-detail__section">
                 <h3>調整角色等級</h3>
                 <p>Lv.0 代表未解鎖；每張角色卡下方會顯示本次增加或減少的等級，變更會先暫存在本頁。</p>
-                <button type="button" className="worker-lineup-save" onClick={() => drawSelectedTeamRoster(selectedTeam.teamId)} disabled={busy || !game || game.phase === "finished" || game.round === 1}>
-                  {busyAction === "draw-one" ? "抽卡中…" : `這隊自動抽 ${DRAW_CARDS} 張`}
-                </button>
+                <div className="worker-team-local-draw">
+                  <label>
+                    <span>抽卡張數</span>
+                    <select value={selectedTeamDrawCount} onChange={(event) => setSelectedTeamDrawCount(Number(event.target.value) || DRAW_CARDS)} disabled={busy || !game || game.phase === "finished" || game.round === 1}>
+                      {Array.from({ length: 14 }, (_, index) => index + 1).map((count) => (
+                        <option key={count} value={count}>{count} 張</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="button" className="worker-lineup-save" onClick={() => drawSelectedTeamRoster(selectedTeam.teamId, selectedTeamDrawCount)} disabled={busy || !game || game.phase === "finished" || game.round === 1}>
+                    套用到草稿
+                  </button>
+                </div>
                 <WorkerRosterEditor team={selectedTeam} allPets={allPets} busy={busy} draftLevels={selectedTeamLevelDraft} onSetLevel={updateTeamLevelDraft} />
               </section>
               <section className="worker-team-detail__section">
