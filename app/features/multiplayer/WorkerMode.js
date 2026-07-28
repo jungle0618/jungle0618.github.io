@@ -385,16 +385,9 @@ export default function WorkerMode({ onBack }) {
     setStrategyProgress(null);
   }, [api]);
   useEffect(() => {
-    let cancelled = false;
-    api.loadSession().then(async (current) => {
-      if (cancelled || !current.authenticated || current.role !== "worker") return;
-      setSession(current);
-      await loadGame();
-    }).catch((nextError) => !cancelled && setError(nextError.message)).finally(() => {
-      if (!cancelled) { setBusy(false); setBusyAction(null); }
-    });
-    return () => { cancelled = true; };
-  }, [api, loadGame]);
+    setBusy(false);
+    setBusyAction(null);
+  }, []);
 
   useEffect(() => {
     if (!overviewOpen) return undefined;
