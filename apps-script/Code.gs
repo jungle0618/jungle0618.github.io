@@ -579,13 +579,14 @@ function loadPlayerGame_(session, payload) {
   }
   const game = loadRawGameState_();
   const duoIds = roundKinds_(game.round).map((kind, index) => kind === "duo" ? challengeId_(game.round, index, kind) : null).filter(Boolean);
-  const pairings = game.currentPairings;
+  const pairings = Array.isArray(game.currentPairings) ? game.currentPairings : [];
   const pairing = pairings.find((item) => String(item.higherRankTeamId) === String(session.teamId) || String(item.lowerRankTeamId) === String(session.teamId));
   const partnerId = pairing && (String(pairing.higherRankTeamId) === String(session.teamId) ? pairing.lowerRankTeamId : pairing.higherRankTeamId);
-  const partner = game.teams.find((team) => String(team.teamId) === String(partnerId));
-  const partnerLineups = (partner && partner.currentLineups || []).filter((row) => duoIds.indexOf(String(row.challengeId)) >= 0);
-  const visibleRoster = (game.roster || []).filter((pet) => String(pet.teamId) === String(session.teamId));
-  const visibleLineups = (game.lineups || []).filter((row) => String(row.teamId) === String(session.teamId));
+  const teams = Array.isArray(game.teams) ? game.teams : [];
+  const partner = teams.find((team) => String(team.teamId) === String(partnerId));
+  const partnerLineups = (Array.isArray(partner && partner.currentLineups) ? partner.currentLineups : []).filter((row) => duoIds.indexOf(String(row.challengeId)) >= 0);
+  const visibleRoster = (Array.isArray(game.roster) ? game.roster : []).filter((pet) => String(pet.teamId) === String(session.teamId));
+  const visibleLineups = (Array.isArray(game.lineups) ? game.lineups : []).filter((row) => String(row.teamId) === String(session.teamId));
   return {
     round: game.round, phase: game.phase, version: game.version, viewerTeamId: session.teamId,
     gameState: game.gameState,
@@ -594,18 +595,22 @@ function loadPlayerGame_(session, payload) {
     roster: visibleRoster,
     lineups: visibleLineups,
     battles: game.battles,
-    teams: game.teams.map((team) => ({
+    teams: teams.map((team) => {
+      const teamRoster = Array.isArray(team.roster) ? team.roster : [];
+      const teamLineups = Array.isArray(team.currentLineups) ? team.currentLineups : [];
+      return ({
       teamId: team.teamId, teamName: team.teamName, score: team.score, rank: team.rank,
       enabled: team.enabled !== false,
       turtle_net: team.turtle_net || "",
       water_park: team.water_park || "",
       turtleNetEnabled: Boolean(team.turtleNetEnabled),
       waterParkEnabled: Boolean(team.waterParkEnabled),
-      levelDistribution: levelDistribution_(team.roster),
-      cardLevelTotal: team.roster.reduce((sum, pet) => sum + (Number(pet.level) || 1), 0),
-      publicRoster: team.roster.map((pet) => ({ petName: pet.petName, level: Number(pet.level) || 1, gameRoundsDeployed: Number(pet.gameRoundsDeployed) || 0 })),
-      ...(String(team.teamId) === String(session.teamId) ? { version: team.version, roster: team.roster, currentLineups: team.currentLineups } : {}),
-    })),
+      levelDistribution: levelDistribution_(teamRoster),
+      cardLevelTotal: teamRoster.reduce((sum, pet) => sum + (Number(pet.level) || 1), 0),
+      publicRoster: teamRoster.map((pet) => ({ petName: pet.petName, level: Number(pet.level) || 1, gameRoundsDeployed: Number(pet.gameRoundsDeployed) || 0 })),
+      ...(String(team.teamId) === String(session.teamId) ? { version: team.version, roster: teamRoster, currentLineups: teamLineups } : {}),
+    });
+    }),
     duoPartner: partner && duoIds.length ? {
       teamId: partner.teamId, teamName: partner.teamName, rank: partner.rank,
       turtle_net: partner.turtle_net || "",
@@ -613,7 +618,7 @@ function loadPlayerGame_(session, payload) {
       turtleNetEnabled: Boolean(partner.turtleNetEnabled),
       waterParkEnabled: Boolean(partner.waterParkEnabled),
       currentLineups: partnerLineups,
-      roster: partner.roster,
+      roster: Array.isArray(partner.roster) ? partner.roster : [],
     } : null,
     duoPairings: pairings,
     battleHistory: game.battleHistory,
