@@ -5,6 +5,13 @@ import GameCard from "../../components/GameCard";
 import { getChallengeLabel, getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
 import { hydrateMultiplayerRoster, multiplayerTeamName } from "./multiplayerAdapter";
 
+function teamFeatureLabels(team = {}) {
+  return [
+    team.turtleNetEnabled ? `烏龜網路${team.turtle_net && !String(team.turtle_net).toLowerCase().includes("true") ? `：${team.turtle_net}` : ""}` : null,
+    team.waterParkEnabled ? `公館水樂園${team.water_park && !String(team.water_park).toLowerCase().includes("true") ? `：${team.water_park}` : ""}` : null,
+  ].filter(Boolean);
+}
+
 export function historyChallengeLabel(round, challengeId) {
   const challenge = getMultiplayerRoundChallenges(Number(round)).find((item) => item.id === String(challengeId));
   return challenge
@@ -72,13 +79,17 @@ export default function MultiplayerOverview({ game, session, cardProps, onClose,
             <>
               <section className="multiplayer-info-section">
                 <h3>排名與角色等級分布</h3>
-                <p>點選隊伍可查看該隊每張卡片的等級。</p>
+                <p>
+                  點選隊伍可查看該隊每張卡片的等級。
+                  {game.gameState?.isRaining ? " 本回合天氣：下雨。" : ""}
+                </p>
                 <div className="multiplayer-team-info-grid">
                   {ranked.map((team) => (
                     <button type="button" key={team.teamId} onClick={() => setSelectedTeamId(team.teamId)}>
                       <strong>#{team.rank || "—"} {multiplayerTeamName(team)}</strong>
                       <b>總分 {team.score}</b>
                       <span>卡片等級總和 {team.cardLevelTotal ?? (team.roster ?? []).reduce((total, pet) => total + (Number(pet.level) || 1), 0)}</span>
+                      {teamFeatureLabels(team).map((label) => <span key={label}>{label}</span>)}
                     </button>
                   ))}
                 </div>

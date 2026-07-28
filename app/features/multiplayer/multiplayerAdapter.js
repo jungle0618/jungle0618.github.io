@@ -18,6 +18,7 @@ export function hydrateMultiplayerRoster(rows = []) {
       const name = row.name ?? row.petName;
       return {
         ...buildNewPet({ ...row, name }, row.level ?? 1),
+        teamId: row.teamId != null ? String(row.teamId) : undefined,
         rosterId: row.rosterId ?? `${row.teamId ?? "team"}:${name}`,
         version: row.version,
       };

@@ -1,7 +1,8 @@
-const API_VERSION = "2026-07-25-initial-round-pool-v1";
+const API_VERSION = "2026-07-28-battle-flags-table-v1";
 const SHEETS = Object.freeze({
   gameState: "GameState", teams: "Teams", roster: "Roster", lineups: "Lineups",
   pairings: "Pairings", battles: "Battles", workerAuth: "WorkerAuth", workerTestData: "WorkerTestData", encounterData: "EncounterData",
+  battleFlags: "BattleFlags",
 });
 const SHEET_HEADERS = Object.freeze({
   GameState: ["round", "phase", "version", "updatedAt"],
@@ -13,6 +14,7 @@ const SHEET_HEADERS = Object.freeze({
   WorkerAuth: ["workerId", "passwordHash", "enabled"],
   WorkerTestData: ["dataKey", "dataJson", "updatedAt"],
   EncounterData: ["dataKey", "dataJson", "updatedAt"],
+  BattleFlags: ["scope", "refId", "turtle_net", "water_park", "is_raining", "updatedAt"],
 });
 const SESSION_SECONDS = 12 * 60 * 60;
 // 後端唯一權威：前端不保存隊伍數量或配對規則。
@@ -153,6 +155,18 @@ function table_(name) {
   }).filter((row) => headers.some((header) => String(row[header] || "").trim() !== ""));
 }
 
+function optionalTable_(name) {
+  const target = spreadsheet_().getSheetByName(name);
+  if (!target) return [];
+  const values = target.getDataRange().getValues();
+  const headers = values[0] || [];
+  return values.slice(1).map((row, index) => {
+    const object = { _rowNumber: index + 2 };
+    headers.forEach((header, column) => object[header] = row[column] === undefined ? "" : row[column]);
+    return object;
+  }).filter((row) => headers.some((header) => String(row[header] || "").trim() !== ""));
+}
+
 function ensureRows_(sheet, rowCount) {
   if (rowCount > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), rowCount - sheet.getMaxRows());
 }
@@ -195,6 +209,64 @@ function passwordHash_(password) {
 
 function verifyPassword_(password, stored) {
   return passwordHash_(password) === String(stored || "");
+}
+
+function truthySheetValue_(value) {
+  if (value === true) return true;
+  const text = String(value || "").trim().toLowerCase();
+  return ["true", "1", "yes", "y", "on"].indexOf(text) >= 0;
+}
+
+function multiplayerTeamFlags_(team) {
+  const turtleRaw = team && team.turtle_net;
+  const waterRaw = team && team.water_park;
+  return {
+    turtle_net: turtleRaw || "",
+    water_park: waterRaw || "",
+    turtleNetEnabled: truthySheetValue_(turtleRaw) || String(turtleRaw || "").trim() !== "",
+    waterParkEnabled: truthySheetValue_(waterRaw),
+  };
+}
+
+function loadBattleFlags_(teams, state) {
+  const rows = optionalTable_(SHEETS.battleFlags);
+  const teamById = {};
+  let gameFlags = null;
+
+  rows.forEach((row) => {
+    const scope = String(row.scope || "").trim().toLowerCase();
+    const refId = String(row.refId || "").trim();
+    if (scope === "team" && refId) {
+      teamById[refId] = {
+        turtle_net: row.turtle_net || "",
+        water_park: row.water_park || "",
+      };
+      return;
+    }
+    if (scope === "game") {
+      gameFlags = {
+        is_raining: row.is_raining || "",
+      };
+    }
+  });
+
+  // 向後相容：如果新表尚未建立或尚未搬資料，暫時回退讀舊欄位。
+  if (!rows.length) {
+    teams.forEach((team) => {
+      if (team.turtle_net || team.water_park) {
+        teamById[String(team.teamId)] = {
+          turtle_net: team.turtle_net || "",
+          water_park: team.water_park || "",
+        };
+      }
+    });
+    if (state && state.is_raining) gameFlags = { is_raining: state.is_raining || "" };
+  }
+
+  return {
+    teamById,
+    gameState: gameFlags || { is_raining: "" },
+  };
 }
 
 function checkLoginRate_(role, accountId) {
@@ -295,6 +367,7 @@ function loadRawGameState_(options = {}) {
   const pairings = table_(SHEETS.pairings);
   const battles = table_(SHEETS.battles);
   const state = states[0] || { round: 1, phase: "prepare", version: 1 };
+  const battleFlags = loadBattleFlags_(teams, state);
   const round = Number(state.round) || 1;
   const savedPairings = pairings.filter((pairing) => Number(pairing.round) === round).map((pairing) => ({
     round: Number(pairing.round), challengeId: String(pairing.challengeId), pairId: String(pairing.pairId),
@@ -317,13 +390,18 @@ function loadRawGameState_(options = {}) {
       phase: state.phase || "prepare",
       version: Number(state.version) || 1,
       updatedAt: state.updatedAt || "",
+      is_raining: battleFlags.gameState.is_raining || "",
+      isRaining: truthySheetValue_(battleFlags.gameState.is_raining),
     },
     formalEncounters: loadFormalEncounters_(),
     teams: teams.map((team) => {
       const teamRoster = roster.filter((pet) => String(pet.teamId) === String(team.teamId));
+      const teamFlags = battleFlags.teamById[String(team.teamId)] || { turtle_net: "", water_park: "" };
       return {
       teamId: String(team.teamId), teamName: team.teamName, score: Number(team.score) || 0,
       rank: Number(team.rank) || 0, version: Number(team.version) || 1,
+      enabled: team.enabled !== false,
+      ...multiplayerTeamFlags_(teamFlags),
       ...(includeRosters ? {
         roster: teamRoster.filter((pet) => (Number(pet.level) || 0) > 0),
         rosterMeta: teamRoster,
@@ -518,6 +596,11 @@ function loadPlayerGame_(session, payload) {
     battles: game.battles,
     teams: game.teams.map((team) => ({
       teamId: team.teamId, teamName: team.teamName, score: team.score, rank: team.rank,
+      enabled: team.enabled !== false,
+      turtle_net: team.turtle_net || "",
+      water_park: team.water_park || "",
+      turtleNetEnabled: Boolean(team.turtleNetEnabled),
+      waterParkEnabled: Boolean(team.waterParkEnabled),
       levelDistribution: levelDistribution_(team.roster),
       cardLevelTotal: team.roster.reduce((sum, pet) => sum + (Number(pet.level) || 1), 0),
       publicRoster: team.roster.map((pet) => ({ petName: pet.petName, level: Number(pet.level) || 1, gameRoundsDeployed: Number(pet.gameRoundsDeployed) || 0 })),
@@ -525,6 +608,10 @@ function loadPlayerGame_(session, payload) {
     })),
     duoPartner: partner && duoIds.length ? {
       teamId: partner.teamId, teamName: partner.teamName, rank: partner.rank,
+      turtle_net: partner.turtle_net || "",
+      water_park: partner.water_park || "",
+      turtleNetEnabled: Boolean(partner.turtleNetEnabled),
+      waterParkEnabled: Boolean(partner.waterParkEnabled),
       currentLineups: partnerLineups,
       roster: partner.roster,
     } : null,
@@ -1201,4 +1288,44 @@ function addEncounterDataSheet() {
   sheet.clear();
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   return "EncounterData 工作表已建立";
+}
+
+function addBattleFlagsSheet() {
+  const spreadsheet = spreadsheet_();
+  const headers = SHEET_HEADERS.BattleFlags;
+  const sheet = spreadsheet.getSheetByName(SHEETS.battleFlags) || spreadsheet.insertSheet(SHEETS.battleFlags);
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+  }
+  return "BattleFlags 工作表已建立";
+}
+
+function migrateBattleFlagsToDedicatedSheet() {
+  addBattleFlagsSheet();
+  const teams = table_(SHEETS.teams);
+  const states = table_(SHEETS.gameState);
+  const state = states[0] || {};
+  const sheet = sheet_(SHEETS.battleFlags);
+  const existing = Math.max(0, sheet.getLastRow() - 1);
+  if (existing) sheet.getRange(2, 1, existing, sheet.getLastColumn()).clearContent();
+
+  const now = new Date().toISOString();
+  const rows = teams
+    .filter((team) => String(team.turtle_net || "").trim() || String(team.water_park || "").trim())
+    .map((team) => [
+      "team",
+      String(team.teamId),
+      team.turtle_net || "",
+      team.water_park || "",
+      "",
+      now,
+    ]);
+
+  if (String(state.is_raining || "").trim()) {
+    rows.push(["game", "current", "", "", state.is_raining || "", now]);
+  }
+
+  if (rows.length) sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+  return `已搬移 ${rows.length} 筆旗標資料到 BattleFlags`;
 }

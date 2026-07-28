@@ -169,6 +169,100 @@ describe("多人模式基礎規則", () => {
     expect(jobs.every((job) => job.leftTeam.length === 6)).toBe(true);
   });
 
+  it("正式戰鬥 jobs 會保留隊伍旗標與天氣狀態", () => {
+    const jobs = buildOfficialBattleJobs({
+      round: 1,
+      gameState: { is_raining: "TRUE", isRaining: true },
+      teams: [{
+        teamId: "3",
+        teamName: "第 3 小隊",
+        rank: 3,
+        roster: [],
+        currentLineups: [],
+        turtle_net: "好的謝謝學長",
+        turtleNetEnabled: true,
+        water_park: "",
+        waterParkEnabled: false,
+      }],
+    });
+
+    expect(jobs[0].environment).toEqual({
+      is_raining: "TRUE",
+      isRaining: true,
+      teamFlags: [{
+        teamId: "3",
+        turtle_net: "好的謝謝學長",
+        water_park: "",
+        turtleNetEnabled: true,
+        waterParkEnabled: false,
+      }],
+    });
+  });
+
+  it("工人正式結算時也會套用公館水樂園的雨天等級 +2", () => {
+    const result = resolveOfficialRound([{
+      battleId: "rain-official",
+      encounterId: "boss-rain",
+      encounterName: "雨天測試",
+      challengeId: "single",
+      kind: "single",
+      round: 5,
+      teamIds: ["4"],
+      environment: {
+        is_raining: "TRUE",
+        isRaining: true,
+        teamFlags: [{ teamId: "4", turtleNetEnabled: false, waterParkEnabled: true }],
+      },
+      leftTeam: [{ ...hydrateMultiplayerRoster([{ teamId: "4", name: "狗", level: 1 }])[0] }],
+      rightTeam: [{ name: "敵人", atk: 0, hp: 999, special: {} }],
+    }], () => ({ total: 0, cleared: false }));
+
+    expect(result.battles[0].battleDetail.opening.leftLineupBeforeOpen[0]).toMatchObject({
+      name: "狗",
+      level: 3,
+    });
+  });
+
+  it("工人正式結算時也會觸發烏龜網路的全場龜系連鎖死亡", () => {
+    const result = resolveOfficialRound([{
+      battleId: "turtle-official",
+      encounterId: "boss-turtle",
+      encounterName: "烏龜網路測試",
+      challengeId: "single",
+      kind: "single",
+      round: 5,
+      teamIds: ["3"],
+      environment: {
+        is_raining: "",
+        isRaining: false,
+        teamFlags: [{ teamId: "3", turtleNetEnabled: true, waterParkEnabled: false }],
+      },
+      leftTeam: [
+        { name: "小龜", atk: 1, hp: 20, level: 1, image: "", special: {}, teamId: "3" },
+        { ...hydrateMultiplayerRoster([{ teamId: "3", name: "烏龜", level: 1 }])[0] },
+      ],
+      rightTeam: [
+        { name: "敵方烏龜", atk: 1, hp: 18, level: 1, image: "", special: {} },
+        { name: "敵人", atk: 40, hp: 999, special: {} },
+      ],
+    }], () => ({ total: 0, cleared: false }));
+
+    expect(result.battles[0].frames[0].events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "turtle_net_cascade_death",
+        source: expect.objectContaining({ name: "烏龜" }),
+        target: expect.objectContaining({ name: "小龜" }),
+        targetSide: "left",
+      }),
+      expect.objectContaining({
+        type: "turtle_net_cascade_death",
+        source: expect.objectContaining({ name: "烏龜" }),
+        target: expect.objectContaining({ name: "敵方烏龜" }),
+        targetSide: "right",
+      }),
+    ]));
+  });
+
   it("正式結算會記錄每隊每關最新的陣容版本", () => {
     expect(getOfficialLineupVersions({
       round: 2,

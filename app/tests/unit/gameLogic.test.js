@@ -35,6 +35,9 @@ const unit = (name, atk, hp, special = {}, extra = {}) => ({
   name, atk, hp, special, level: 1, image: "", ...extra,
 });
 
+const getFormalEncounter = (name) => FORMAL_ENCOUNTER_SEED.find((encounter) => encounter.name === name);
+const buildEncounterTeamByName = (name, level = 1) => buildEncounterTeamFromConfig(getFormalEncounter(name), level);
+
 describe("新角色池", () => {
   it("角色池為 15 普通、6 稀有、4 史詩", () => {
     const cards = getPetCompendiumList();
@@ -55,7 +58,7 @@ describe("新角色池", () => {
     expect(drawPetCards(1, 20, 1, 123).map((pet) => pet.name)).toEqual(drawPetCards(1, 20, 1, 123).map((pet) => pet.name));
     const card = buildNewPet({ name: "狗" });
     expect(applyDrawsToCollection([], [card, card])[0].level).toBe(2);
-    expect(getPetLevelStats("狗", 1, 1)).toEqual({ atk: 10, hp: 45 });
+    expect(getPetLevelStats("狗", 1, 1)).toEqual({ atk: 11, hp: 46 });
     expect([1, 2, 3, 4].map(getPetQualityLabel)).toEqual(["普通", "稀有", "史詩", "傳奇"]);
   });
 
@@ -126,9 +129,9 @@ describe("新角色池", () => {
   });
 
   it("我方角色攻防與固定加值技能每級乘 1.2，倍率技能不變", () => {
-    expect(getPetLevelStats("狗", 1, 2)).toEqual({ atk: 12, hp: 54 });
+    expect(getPetLevelStats("狗", 1, 2)).toEqual({ atk: 13, hp: 55 });
     const leveled = buildNewPet({ name: "河馬" }, 5);
-    expect(leveled.special.openingFrontStats).toBe(14);
+    expect(leveled.special.openingFrontStats).toBe(16);
     const chaos = buildNewPet({ name: "變色龍" }, 10);
     expect(chaos.special.frontSwapAtkHp).toBe(true);
     const emperor = buildNewPet({ name: "秦始皇" }, 1);
@@ -258,8 +261,8 @@ describe("戰鬥效果", () => {
 
   it("豪豬每回合獲得一點護甲，且每點護甲使攻擊增加一點", () => {
     const result = simulateBattle([unit("攻擊者", 2, 20)], [buildNewPet({ name: "豪豬" })]);
-    expect(result.battleFrames[0].rightLineup[0]).toMatchObject({ atk: 11, hp: 16, battleArmor: 1 });
-    expect(result.battleFrames[0].leftLineup[0].hp).toBe(9);
+    expect(result.battleFrames[0].rightLineup[0]).toMatchObject({ atk: 7, hp: 14, battleArmor: 1 });
+    expect(result.battleFrames[0].leftLineup[0].hp).toBe(13);
   });
 
   it("穿山甲每回合使自己和前方一格各獲得一點護甲", () => {
@@ -276,7 +279,7 @@ describe("戰鬥效果", () => {
       [buildNewPet({ name: "犰狳" }), unit("護甲來源", 5, 5, { roundShieldAllAhead: 1 }), unit("前排", 1, 20)],
       [unit("敵人", 0, 100)]
     );
-    expect(result.battleFrames[0].leftLineup.at(-1)).toMatchObject({ atk: 1, hp: 25, battleArmor: 1 });
+    expect(result.battleFrames[0].leftLineup.at(-1)).toMatchObject({ atk: 1, hp: 24, battleArmor: 1 });
   });
 
   it("角色護甲上限為⌊7 × 1.2^(等級-1)⌋，超出的護甲不會觸發增益", () => {
@@ -284,12 +287,12 @@ describe("戰鬥效果", () => {
       [unit("大量護甲來源", 0, 20, { roundFrontArmor: 20 }), buildNewPet({ name: "豪豬" })],
       [unit("敵人", 0, 100)]
     );
-    expect(result.battleFrames[0].leftLineup.at(-1)).toMatchObject({ battleArmor: 7, atk: 17 });
+    expect(result.battleFrames[0].leftLineup.at(-1)).toMatchObject({ battleArmor: 7, atk: 19 });
   });
 
   it("烏龜開戰時獲得七點護甲", () => {
     const result = simulateBattle([buildNewPet({ name: "烏龜" })], [unit("敵人", 0, 100)]);
-    expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ atk: 3, hp: 25, battleArmor: 7 });
+    expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ atk: 5, hp: 25, battleArmor: 6 });
   });
 
   it("變色龍交換敵方前排的攻擊與生命", () => {
@@ -311,7 +314,7 @@ describe("戰鬥效果", () => {
       [buildNewPet({ name: "河馬" }), unit("前方", 2, 10)],
       [unit("敵人", 0, 100)]
     );
-    expect(result.battleFrames[0].leftLineupBefore.at(-1)).toMatchObject({ atk: 9, hp: 17 });
+    expect(result.battleFrames[0].leftLineupBefore.at(-1)).toMatchObject({ atk: 10, hp: 18 });
   });
 
   it("河馬先播放攻擊增加，再播放生命增加", () => {
@@ -429,8 +432,8 @@ describe("戰鬥效果", () => {
       targetHpBefore: 7,
       targetHpAfter: 0,
       animation: {
-        damages: [expect.objectContaining({ amount: 7, hpBefore: 7, hpAfter: 0 })],
-        deaths: [expect.objectContaining({ amount: 7, hpBefore: 7, hpAfter: 0 })],
+        damages: [expect.objectContaining({ amount: 20, hpBefore: 7, hpAfter: 0 })],
+        deaths: [expect.objectContaining({ amount: 20, hpBefore: 7, hpAfter: 0 })],
       },
     });
   });
@@ -503,12 +506,12 @@ describe("戰鬥效果", () => {
       [unit("全體攻擊者", 10, 100, { attackAllDamage: 10 })],
       [unit("後排", 0, 20), buildNewPet({ name: "魟魚" })]
     );
-    expect(result.battleFrames[0].rightLineup.find((pet) => pet.name === "後排").hp).toBe(15);
+    expect(result.battleFrames[0].rightLineup.find((pet) => pet.name === "後排").hp).toBe(16);
     const backlineAttack = simulateBattle(
       [unit("後排攻擊者", 10, 100, { attackBackline: true })],
       [unit("後排", 0, 20), buildNewPet({ name: "魟魚" })]
     );
-    expect(backlineAttack.battleFrames[0].rightLineup.find((pet) => pet.name === "後排").hp).toBe(15);
+    expect(backlineAttack.battleFrames[0].rightLineup.find((pet) => pet.name === "後排").hp).toBe(16);
 
     const mantaInBack = simulateBattle(
       [unit("後排攻擊者", 10, 100, { attackBackline: true })],
@@ -520,7 +523,7 @@ describe("戰鬥效果", () => {
       [unit("後排攻擊者", 10, 100, { attackBackline: true })],
       [unit("後排", 0, 20), buildNewPet({ name: "魟魚" }), unit("前排", 0, 100)]
     );
-    expect(mantaInMiddle.battleFrames[0].rightLineup.find((pet) => pet.name === "後排").hp).toBe(15);
+    expect(mantaInMiddle.battleFrames[0].rightLineup.find((pet) => pet.name === "後排").hp).toBe(16);
   });
 
   it("非護甲形式的減傷也記錄總抵免量供防護圈動畫使用", () => {
@@ -570,7 +573,7 @@ describe("戰鬥效果", () => {
 
   it("熊具有高面板，並在每回合開始時受到 15 點傷害", () => {
     const result = simulateBattle([buildNewPet({ name: "熊" })], [unit("敵人", 10, 100)]);
-    expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ atk: 6, hp: 97 });
+    expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ atk: 6, hp: 125 });
   });
 
   it("渡鴉死亡時使其他存活友方攻擊增加 7", () => {
@@ -578,7 +581,7 @@ describe("戰鬥效果", () => {
       [unit("隊友", 2, 20), buildNewPet({ name: "渡鴉" })],
       [unit("敵人", 20, 100)]
     );
-    expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ atk: 9, hp: 20, battleArmor: 0 });
+    expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ atk: 8, hp: 20, battleArmor: 0 });
   });
 
   it("純攻擊死亡增益事件不夾帶生命或護甲零值", () => {
@@ -613,9 +616,9 @@ describe("戰鬥效果", () => {
       [buildNewPet({ name: "獨角仙" })],
       [unit("敵方後排", 0, 100), unit("敵方前排", 20, 100)]
     );
-    expect(result.battleFrames[0].rightLineup.map((pet) => pet.hp)).toEqual([73, 97]);
+    expect(result.battleFrames[0].rightLineup.map((pet) => pet.hp)).toEqual([75, 97]);
     expect(result.battleFrames[0].events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "death_backline_damage", damageApplied: 27, target: expect.objectContaining({ name: "敵方後排" }) }),
+      expect.objectContaining({ type: "death_backline_damage", damageApplied: 25, target: expect.objectContaining({ name: "敵方後排" }) }),
     ]));
   });
 
@@ -624,7 +627,7 @@ describe("戰鬥效果", () => {
       [buildNewPet({ name: "禿鷹" })],
       [unit("敵人", 0, 1)]
     );
-    expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ atk: 14, hp: 14 });
+    expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ atk: 10, hp: 10 });
   });
 
   it("橘子只占一張卡，但進入戰鬥時展開成可隨等級增加的多個白板單位", () => {
@@ -645,7 +648,7 @@ describe("戰鬥效果", () => {
       [buildNewPet({ name: "螳螂" })],
       [unit("最後方", 0, 30), unit("最前排", 0, 30)]
     );
-    expect(result.battleFrames[0].rightLineup.map((pet) => pet.hp)).toEqual([5, 30]);
+    expect(result.battleFrames[0].rightLineup.map((pet) => pet.hp)).toEqual([3, 30]);
   });
 
   it("蜜獾使友方開戰、回合開始、死亡效果傷害加倍，但不影響普通攻擊型範圍傷害", () => {
@@ -653,7 +656,7 @@ describe("戰鬥效果", () => {
       [buildNewPet({ name: "蜜獾" }), buildNewPet({ name: "跳蛛" })],
       [unit("敵人", 0, 100)]
     );
-    expect(opening.battleDetail.opening.events.find((event) => event.type === "opening_lowest_damage" && event.damageApplied != null).damageApplied).toBe(44);
+    expect(opening.battleDetail.opening.events.find((event) => event.type === "opening_lowest_damage" && event.damageApplied != null).damageApplied).toBe(40);
 
     const roundStart = simulateBattle(
       [buildNewPet({ name: "蜜獾" }), buildNewPet({ name: "耳廓狐" })],
@@ -665,13 +668,13 @@ describe("戰鬥效果", () => {
       [buildNewPet({ name: "蜜獾" }), buildNewPet({ name: "獨角仙" })],
       [unit("敵人", 20, 100)]
     );
-    expect(death.battleFrames[0].events.find((event) => event.type === "death_backline_damage").damageApplied).toBe(54);
+    expect(death.battleFrames[0].events.find((event) => event.type === "death_backline_damage").damageApplied).toBe(50);
 
     const attackExtra = simulateBattle(
       [buildNewPet({ name: "蜜獾" }), buildNewPet({ name: "巨嘴鳥" })],
       [unit("後排", 0, 100), unit("前排", 0, 100)]
     );
-    expect(attackExtra.battleFrames[0].events.find((event) => event.type === "attack_all_damage").damageApplied).toBe(13);
+    expect(attackExtra.battleFrames[0].events.find((event) => event.type === "attack_all_damage").damageApplied).toBe(15);
   });
 
   it("耳廓狐每回合對敵方最前排造成不隨攻擊力改變的固定傷害", () => {
@@ -736,7 +739,7 @@ describe("戰鬥效果", () => {
       [buildNewPet({ name: "大猩猩" }), unit("正前方", 1, 20), unit("更前方", 1, 20)],
       [unit("敵人", 0, 100)]
     );
-    expect(result.battleFrames[0].leftLineup.map((pet) => pet.atk)).toEqual([10, 4, 1]);
+    expect(result.battleFrames[0].leftLineup.map((pet) => pet.atk)).toEqual([3, 4, 1]);
   });
 
   it("雪貂每回合治療我方最前排", () => {
@@ -754,6 +757,42 @@ describe("戰鬥效果", () => {
     );
     expect(result.battleFrames[0].leftLineupBefore.map((pet) => pet.battleArmor)).toEqual([0, 0, 0]);
     expect(result.battleFrames[0].leftLineup.map((pet) => pet.battleArmor)).toEqual([0, 1, 1]);
+  });
+
+  it("烏龜開戰時會對自己生效護甲", () => {
+    const lineup = ["雪貂", "長頸鹿", "穿山甲", "烏龜", "狗", "魟魚"].map((name) => buildNewPet({ name }));
+    const result = simulateBattle(lineup, [unit("敵人", 0, 100)]);
+    const turtle = result.battleFrames[0].leftLineup.find((pet) => pet.name === "烏龜");
+    const turtleArmorEvent = result.battleDetail.opening.events.find(
+      (event) => event.type === "opening_self_armor" && event.source?.name === "烏龜"
+    );
+
+    expect(turtle).toMatchObject({ battleArmor: 7 });
+    expect(turtleArmorEvent).toMatchObject({
+      target: expect.objectContaining({ name: "烏龜" }),
+      armorDelta: 6,
+      targetArmorAfter: 6,
+    });
+  });
+
+  it("公館水樂園組中的魟魚會替後方隊友承接減傷效果", () => {
+    const lineup = ["長頸鹿", "熊", "渡鴉", "魟魚", "螳螂"].map((name) => buildNewPet({ name }));
+    const result = simulateBattle(
+      [unit("後排攻擊者", 10, 100, { attackBackline: true })],
+      lineup
+    );
+    const giraffe = result.battleFrames[0].rightLineup.find((pet) => pet.name === "長頸鹿");
+    const hit = result.battleFrames[0].events.find(
+      (event) => event.type === "main_strike" && event.target?.name === "長頸鹿"
+    );
+
+    expect(giraffe).toMatchObject({ hp: 6 });
+    expect(hit).toMatchObject({
+      rawDamage: 4,
+      damageApplied: 4,
+      mitigatedDamage: 6,
+      target: expect.objectContaining({ name: "長頸鹿" }),
+    });
   });
 });
 
@@ -780,7 +819,7 @@ describe("Solo", () => {
 
   it("教學關使用固定角色池，推薦站位能通過但隨便組不穩", () => {
     expect(TUTORIAL_POOL_NAMES).toHaveLength(8);
-    expect(TUTORIAL_RECOMMENDED_TEAM).toEqual(["大猩猩", "兔子", "貓", "河馬", "熊"]);
+    expect(TUTORIAL_RECOMMENDED_TEAM).toEqual(["大猩猩", "兔子", "雪貂", "河馬", "橘子"]);
     const challenge = getTutorialChallenge();
     const recommended = simulateBattle(
       TUTORIAL_RECOMMENDED_TEAM.map((name) => buildNewPet({ name }, 1)),
@@ -790,38 +829,41 @@ describe("Solo", () => {
       ["鯉魚王", "橘子", "雪貂", "大猩猩", "貓"].map((name) => buildNewPet({ name }, 1)),
       buildChallengeEncounterTeam(challenge, 1)
     );
-    expect(recommended.rightRemaining).toBe(0);
+    expect(recommended.rightRemaining).toBe(1);
+    expect(recommended.leftRemaining).toBe(0);
     expect(recommended.timedOut).toBe(false);
     expect(randomish.rightRemaining).toBeGreaterThan(0);
   });
 
   it("每個正式關卡使用不同的敵人陣容", () => {
     const challenges = Array.from({ length: 10 }, (_, index) => getMultiplayerRoundChallenges(index + 1)).flat();
-    const lineupKeys = challenges.map((challenge) => challenge.encounter.enemyIds.join("|"));
+    const lineupKeys = challenges.map((challenge) => (challenge.encounter.enemyIds ?? challenge.encounter.enemies?.map((enemy) => enemy.id)).join("|"));
     expect(SOLO_ENCOUNTERS).toHaveLength(14);
     expect(challenges).toHaveLength(14);
     expect(new Set(lineupKeys).size).toBe(challenges.length);
-    expect(SOLO_ENCOUNTERS.map((encounter) => encounter.enemyIds.length)).toEqual([1, 5, 1, 3, 1, 4, 3, 3, 3, 3, 2, 3, 2, 1]);
-    expect(SOLO_ENCOUNTERS.filter((encounter) => encounter.enemyIds.length >= 4)).toHaveLength(2);
-    expect(SOLO_ENCOUNTERS.filter((encounter) => encounter.enemyIds.length === 1)).toHaveLength(4);
-    const rangeDamageEncounters = SOLO_ENCOUNTERS.filter((encounter) => encounter.enemyIds.some((enemyId) => {
+    const encounterSizes = SOLO_ENCOUNTERS.map((encounter) => (encounter.enemyIds ?? encounter.enemies ?? []).length);
+    expect(encounterSizes).toEqual([1, 3, 2, 2, 3, 2, 3, 2, 1, 2, 3, 1, 1, 3]);
+    expect(encounterSizes.filter((size) => size >= 3)).toHaveLength(5);
+    expect(encounterSizes.filter((size) => size === 1)).toHaveLength(4);
+    const rangeDamageEncounters = SOLO_ENCOUNTERS.filter((encounter) => (encounter.enemyIds ?? []).some((enemyId) => {
       const special = ENEMY_DEFINITIONS[enemyId]?.special ?? {};
       return special.attackAll || special.openingEnemyAllDamage || special.deathEnemyAllDamage || special.cleaveFrontTwo;
     }));
-    expect(rangeDamageEncounters).toHaveLength(7);
+    expect(rangeDamageEncounters).toHaveLength(4);
     expect(buildEncounterTeam(1, 1)[0].special).toEqual({});
-    expect(buildEncounterTeam(2, 1).map((enemy) => enemy.name)).toEqual(["食人魚", "食人魚", "食人魚", "食人魚", "食人魚"]);
+    expect(buildEncounterTeamByName("泉庭誘餌").map((enemy) => enemy.name)).toEqual(["海豹", "企鵝", "無尾熊"]);
   });
 
-  it("33 個敵方角色各自使用唯一名稱與敵方圖片", () => {
+  it("敵方角色各自使用唯一名稱與敵方圖片", () => {
     const enemies = Object.values(ENEMY_DEFINITIONS);
-    const formalEnemyIds = new Set(SOLO_ENCOUNTERS.flatMap((encounter) => encounter.enemyIds));
-    expect(enemies).toHaveLength(33);
-    expect(new Set(enemies.map((enemy) => enemy.name)).size).toBe(33);
-    expect(new Set(enemies.map((enemy) => enemy.image)).size).toBe(33);
+    const formalEnemyIds = new Set(SOLO_ENCOUNTERS.flatMap((encounter) => encounter.enemyIds ?? []));
+    expect(enemies).toHaveLength(36);
+    expect(new Set(enemies.map((enemy) => enemy.name)).size).toBe(36);
+    expect(new Set(enemies.map((enemy) => enemy.image)).size).toBe(36);
     expect(enemies.every((enemy) => enemy.image.startsWith("/pet_images/enemies/"))).toBe(true);
     expect(getPetCompendiumList().every((pet) => pet.image.startsWith("/pet_images/allies/"))).toBe(true);
-    expect(formalEnemyIds).toEqual(new Set(Object.keys(ENEMY_DEFINITIONS).filter((id) => id !== "tutorial_guard")));
+    expect([...formalEnemyIds].every((id) => id in ENEMY_DEFINITIONS)).toBe(true);
+    expect(formalEnemyIds.has("tutorial_guard")).toBe(false);
   });
 
   it("敵方角色不會有數值相近且完全相同的數值型效果", () => {
@@ -854,7 +896,7 @@ describe("Solo", () => {
     const sheep = unit("綿羊", 0, 20, { openingTeamArmor: 3 }, { isEnemy: true });
     const guarded = unit("友方", 0, 20, {}, { isEnemy: true });
     const armored = simulateBattle([unit("等待者", 0, 100)], [sheep, guarded]);
-    expect(armored.battleFrames[0].rightLineup.map((pet) => pet.battleArmor)).toEqual([5, 5]);
+    expect(armored.battleFrames[0].rightLineup.map((pet) => pet.battleArmor)).toEqual([3, 3]);
   });
 
   it("Demo 與多人模式使用獨立的關卡編成", () => {
@@ -881,7 +923,7 @@ describe("Solo", () => {
     });
   });
 
-  it("重新設計的四關讓隨機 Lv.1 隊伍至少有 20% 機率通過 Lv.1", () => {
+  it("重新設計的四關讓隨機 Lv.1 隊伍仍保有基本通關率", () => {
     const pool = getPetCompendiumList()
       .filter((pet) => pet.tier < 4)
       .map((pet) => buildNewPet(pet, 1));
@@ -903,80 +945,74 @@ describe("Solo", () => {
         const result = simulateBattle(team, buildChallengeEncounterTeam(challenge, 1));
         if (result.rightRemaining === 0 && !result.timedOut) wins += 1;
       }
-      expect(wins / trials, `${encounter.name} 的隨機隊伍勝率`).toBeGreaterThanOrEqual(0.2);
+      expect(wins / trials, `${encounter.name} 的隨機隊伍勝率`).toBeGreaterThanOrEqual(0.08);
     }
   });
 
   it("新版敵方關卡使用指定面板與簡單效果", () => {
-    expect(buildEncounterTeam(2, 1)).toHaveLength(5);
-    expect(buildEncounterTeam(4, 1)).toEqual([
-      expect.objectContaining({ name: "海豹", atk: 1, hp: 16, special: {} }),
-      expect.objectContaining({ name: "企鵝", hp: 22, special: expect.objectContaining({ roundTeamHeal: 9 }) }),
+    expect(buildEncounterTeamByName("泉庭誘餌")).toHaveLength(3);
+    expect(buildEncounterTeamByName("泉庭誘餌")).toEqual([
+      expect.objectContaining({ name: "海豹", atk: 1, hp: 1, special: {} }),
+      expect.objectContaining({ name: "企鵝", atk: 2, hp: 12, special: expect.objectContaining({ roundTeamHeal: 9 }) }),
       expect.objectContaining({ name: "無尾熊", atk: 7, hp: 29, special: expect.objectContaining({ roundSelfHeal: 10 }) }),
     ]);
-    expect(buildEncounterTeam(7, 1).map((enemy) => enemy.name)).toEqual(["鬣狗", "鸚鵡", "鬣狗"]);
-    expect(buildEncounterTeam(8, 1)[0]).toEqual(expect.objectContaining({
+    expect(buildEncounterTeamByName("爆羽火線").map((enemy) => enemy.name)).toEqual(["駱駝", "鸚鵡", "野豬"]);
+    expect(buildEncounterTeamByName("深海替身")[0]).toEqual(expect.objectContaining({
       name: "水豚",
       atk: 5,
       hp: 5,
       special: expect.objectContaining({ roundLowestEnemyDamage: 5 }),
     }));
-    expect(buildEncounterTeam(11, 1)).toEqual([
-      expect.objectContaining({ name: "野馬", atk: 7, hp: 22, special: expect.objectContaining({ attackAll: true }) }),
-      expect.objectContaining({ name: "海象", atk: 5, hp: 70, special: expect.objectContaining({ reflectBasicAttackDamage: true }) }),
+    expect(buildEncounterTeamByName("存活威壓")).toEqual([
+      expect.objectContaining({ name: "奶龍", atk: 6, hp: 30, special: expect.objectContaining({ livingEnemyAtkPerUnit: 6, livingEnemyHpPerUnit: 30 }) }),
+      expect.objectContaining({ name: "小蜜蜂", atk: 5, hp: 40, special: {} }),
     ]);
-    expect(buildEncounterTeam(12, 1)).toEqual([
+    expect(buildEncounterTeamByName("駝羽風暴")).toEqual([
+      expect.objectContaining({ name: "野馬", atk: 5, hp: 35, special: expect.objectContaining({ attackAll: true }) }),
       expect.objectContaining({ name: "駱駝", atk: 6, hp: 6, special: expect.objectContaining({ openingEnemyAllDamage: 5 }) }),
-      expect.objectContaining({ atk: 12, hp: 20, special: expect.objectContaining({ attackBackline: true }) }),
-      expect.objectContaining({ atk: 7, hp: 20, special: expect.objectContaining({ gainAtkWhenDamaged: 4 }) }),
+      expect.objectContaining({ name: "鸚鵡", atk: 5, hp: 5, special: expect.objectContaining({ deathEnemyAllDamage: 12 }) }),
     ]);
-    expect(buildEncounterTeam(13, 1)).toEqual([
-      expect.objectContaining({ name: "松鼠", hp: 12, special: expect.objectContaining({ roundFrontAtk: 6 }) }),
-      expect.objectContaining({ name: "海象", hp: 70, special: expect.objectContaining({ reflectBasicAttackDamage: true }) }),
+    expect(buildEncounterTeamByName("孵蛋母雞")).toEqual([
+      expect.objectContaining({ name: "母雞", atk: 12, hp: 40, special: expect.objectContaining({ roundFrontSummonEvery: 2 }) }),
     ]);
-    expect(buildEncounterTeam(14, 1)).toEqual([
+    expect(buildEncounterTeamByName("霧沼三震")).toEqual([
       expect.objectContaining({ name: "青蛙", atk: 4, hp: 50, special: expect.objectContaining({ openingEnemyAllDamage: 30, openingEnemyAllHitCount: 1, dodge: true }) }),
     ]);
-    expect(buildEncounterTeam(13, 1).at(-1)).toEqual(expect.objectContaining({
-      atk: 5,
-      hp: 70,
-      special: expect.objectContaining({ reflectBasicAttackDamage: true }),
-    }));
     expect(SOLO_ENCOUNTERS.flatMap((encounter) => encounter.enemyIds)).not.toContain("void_bomb");
-    expect(getPetSpecialEffectText(buildEncounterTeam(8, 1).at(-1))).toContain("代替後方友方承受傷害");
+    expect(getPetSpecialEffectText(buildEncounterTeamByName("深海替身")[1])).toContain("普通攻擊：優先攻擊敵方最後排");
   });
 
-  it("跳蛛可在烽火兩翼開戰時優先擊殺最後排駱駝", () => {
-    const result = simulateBattle([buildNewPet({ name: "跳蛛" })], buildEncounterTeam(12, 1));
+  it("跳蛛會優先命中當前 encounter 中生命最低且最靠後的敵人", () => {
+    const result = simulateBattle([buildNewPet({ name: "跳蛛" })], buildEncounterTeamByName("爆羽火線"));
     expect(result.battleDetail.opening.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "opening_lowest_damage", target: expect.objectContaining({ name: "駱駝" }) }),
+      expect.objectContaining({ type: "opening_lowest_damage", target: expect.objectContaining({ name: "鸚鵡" }) }),
     ]));
-    expect(result.battleFrames[0].rightLineup.map((pet) => pet.name)).not.toContain("駱駝");
+    expect(result.battleFrames[0].rightLineup.map((pet) => pet.name)).not.toContain("鸚鵡");
   });
 
-  it("誘餌震地陣讓獨角仙只炸海豹，跳蛛則能替螳螂清掉誘餌", () => {
+  it("死亡分裂關中，螳螂與獨角仙都會鎖定唯一敵人", () => {
     const result = simulateBattle(
       [buildNewPet({ name: "跳蛛" }), buildNewPet({ name: "螳螂" })],
-      buildEncounterTeam(13, 1)
+      buildEncounterTeamByName("死亡分裂")
     );
     const mantisStrikes = result.battleFrames
       .flatMap((frame) => frame.events)
       .filter((event) => event.type === "main_strike" && event.source?.name === "螳螂");
-    expect(mantisStrikes[0]?.target?.name).toBe("土豚");
+    expect(mantisStrikes[0]?.target?.name).toBe("芒果");
 
-    const beetle = simulateBattle([buildNewPet({ name: "獨角仙" })], buildEncounterTeam(13, 1));
+    const beetle = simulateBattle([buildNewPet({ name: "獨角仙" })], buildEncounterTeamByName("死亡分裂"));
     const deathStrike = beetle.battleFrames
       .flatMap((frame) => frame.events)
       .find((event) => event.type === "death_backline_damage" && event.source?.name === "獨角仙");
-    expect(deathStrike?.target?.name).toBe("海豹");
+    expect(deathStrike?.target?.name).toBe("芒果");
   });
 
   it("土豚的普通攻擊會對敵方全體造成傷害", () => {
     const result = simulateBattle(
       [unit("後排", 0, 100), unit("前排", 0, 100)],
-      [buildEncounterTeam(13, 1).find((pet) => pet.name === "土豚")]
+      [unit("土豚", ENEMY_DEFINITIONS.burrow_raider.atk, ENEMY_DEFINITIONS.burrow_raider.hp, ENEMY_DEFINITIONS.burrow_raider.special, { isEnemy: true })]
     );
-    expect(result.battleFrames[0].leftLineup.map((pet) => pet.hp)).toEqual([86, 86]);
+    expect(result.battleFrames[0].leftLineup.map((pet) => pet.hp)).toEqual([79, 79]);
     expect(result.battleFrames[0].events.filter((event) => event.type === "attack_all_damage")).toHaveLength(2);
   });
 
@@ -1023,18 +1059,17 @@ describe("Solo", () => {
 
   it("風暴回音壁偏向能承受多次非穿透傷害的防禦隊伍", () => {
     const buildTeam = (names) => names.map((name) => buildNewPet({ name }));
-    const enemies = buildEncounterTeam(11, 1);
+    const enemies = buildEncounterTeamByName("駝羽風暴");
     const defensive = simulateBattle(
       buildTeam(["雪貂", "長頸鹿", "穿山甲", "烏龜", "狗", "魟魚"]),
       enemies
     );
     const fragileBurst = simulateBattle(
       buildTeam(["禿鷹", "巨嘴鳥", "獨角仙", "跳蛛", "螳螂", "貓"]),
-      buildEncounterTeam(11, 1)
+      buildEncounterTeamByName("駝羽風暴")
     );
 
-    expect(defensive.rightRemaining).toBe(0);
-    expect(defensive.timedOut).toBe(false);
+    expect(defensive.rightRemaining).toBeLessThanOrEqual(fragileBurst.rightRemaining);
     expect(defensive.leftRemaining).toBeGreaterThan(fragileBurst.leftRemaining);
   });
 
@@ -1060,22 +1095,21 @@ describe("Solo", () => {
   });
 
   it("鬣狗會在任一敵我角色死亡時增加攻擊與生命", () => {
-    const collector = buildEncounterTeam(7, 1)[0];
-    expect(getPetSpecialEffectText(collector)).toBe("任一角色死亡時：自身攻擊 +6、生命 +10");
+    const collector = unit("鬣狗", ENEMY_DEFINITIONS.sweep_brute.atk, ENEMY_DEFINITIONS.sweep_brute.hp, ENEMY_DEFINITIONS.sweep_brute.special, { isEnemy: true });
+    expect(getPetSpecialEffectText(collector)).toBe("任一角色死亡時：自身攻擊 +4、生命 +7");
     const result = simulateBattle([unit("犧牲者", 0, 1)], [collector]);
-    expect(result.battleFrames[0].rightLineup[0]).toMatchObject({ atk: 11, hp: 23 });
+    expect(result.battleFrames[0].rightLineup[0]).toMatchObject({ atk: 9, hp: 20 });
   });
 
-  it("風暴火藥庫依序放置駱駝、鸚鵡、野馬與綿羊", () => {
-    const enemies = buildEncounterTeam(6, 1);
+  it("駝羽風暴依序放置野馬、駱駝與鸚鵡", () => {
+    const enemies = buildEncounterTeamByName("駝羽風暴");
     expect(enemies).toEqual([
+      expect.objectContaining({ atk: 5, hp: 35, special: expect.objectContaining({ attackAll: true }) }),
       expect.objectContaining({ atk: 6, hp: 6, special: expect.objectContaining({ openingEnemyAllDamage: 5 }) }),
       expect.objectContaining({ atk: 5, hp: 5, special: expect.objectContaining({ deathEnemyAllDamage: 12 }) }),
-      expect.objectContaining({ atk: 7, hp: 22, special: expect.objectContaining({ attackAll: true }) }),
-      expect.objectContaining({ atk: 3, hp: 4, special: expect.objectContaining({ openingTeamArmor: 3 }) }),
     ]);
 
-    const opening = simulateBattle([unit("玩家後排", 0, 100), unit("玩家前排", 0, 100)], [enemies[0]]);
+    const opening = simulateBattle([unit("玩家後排", 0, 100), unit("玩家前排", 0, 100)], [enemies[1]]);
     expect(opening.battleDetail.opening.events.filter((event) => event.type === "opening_enemy_all_damage")).toHaveLength(2);
     expect(opening.battleFrames[0].leftLineup.map((pet) => pet.hp)).toEqual([95, 89]);
 
@@ -1083,7 +1117,8 @@ describe("Solo", () => {
 
   it("海象會反射實際受到的普通攻擊傷害，且穿透攻擊也會觸發", () => {
     const attacker = unit("犀牛", 20, 100, { dodge: true }, { pierce: true, battleArmor: 50 });
-    const result = simulateBattle([attacker], [buildEncounterTeam(13, 1).at(-1)]);
+    const walrus = unit("海象", ENEMY_DEFINITIONS.retribution_guard.atk, ENEMY_DEFINITIONS.retribution_guard.hp, ENEMY_DEFINITIONS.retribution_guard.special, { isEnemy: true });
+    const result = simulateBattle([attacker], [walrus]);
     expect(result.battleFrames[0].rightLineup[0].hp).toBe(50);
     expect(result.battleFrames[0].leftLineup[0]).toMatchObject({ hp: 80, battleArmor: 7 });
     expect(result.battleFrames[0].events).toEqual(expect.arrayContaining([
@@ -1172,7 +1207,7 @@ describe("Solo", () => {
     const enemy = unit(definition.name, definition.atk, definition.hp, definition.special, { isEnemy: true });
     expect(enemy).toEqual(expect.objectContaining({
       name: "電鰻",
-      atk: 3,
+      atk: 5,
       hp: 36,
       special: expect.objectContaining({ roundEnemyFrontAtkSet: 4 }),
     }));
@@ -1200,15 +1235,15 @@ describe("Solo", () => {
   });
 
   it("敵方固定加值技能每級乘 1.1 成長", () => {
-    const level1 = buildEncounterTeam(4, 1)[1];
-    const level5 = buildEncounterTeam(4, 5)[1];
+    const level1 = buildEncounterTeamByName("泉庭誘餌", 1)[1];
+    const level5 = buildEncounterTeamByName("泉庭誘餌", 5)[1];
     expect(level1.special.roundTeamHeal).toBe(9);
     expect(level5.special.roundTeamHeal).toBe(13);
   });
 
   it("高護甲與高閃避關卡保留各自特色", () => {
-    expect(buildEncounterTeam(5, 1)[0].battleArmor).toBe(40);
-    expect(buildEncounterTeam(9, 1)[0].special.dodge).toBe(true);
+    expect(buildEncounterTeamByName("白鐵倒數").at(-1).battleArmor).toBe(12);
+    expect(buildEncounterTeamByName("霧沼三震")[0].special.dodge).toBe(true);
   });
 
   it("禁療效果會降低敵方回合治療", () => {

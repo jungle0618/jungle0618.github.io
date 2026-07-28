@@ -208,8 +208,8 @@ function WorkerAllLineupsDialog({ game, busy, onClose }) {
           </div>
         </header>
         <div className="worker-team-dialog__body worker-team-dialog__body--lineup-overview">
-          {rankedTeams.map((team) => (
-            <section className="worker-lineup-overview-team" key={team.teamId}>
+          {rankedTeams.map((team, teamIndex) => (
+            <section className="worker-lineup-overview-team" key={team.teamId ?? `overview-team-${teamIndex}`}>
               <div className="worker-lineup-overview-team__heading">
                 <strong>#{team.rank || "—"} {team.teamName || `第 ${team.teamId} 小隊`}</strong>
                 <span>{team.score} 分</span>
@@ -275,8 +275,8 @@ function WorkerStrategySection({ results, progress, busy, onRun }) {
                 </tr>
               </thead>
             <tbody>
-              {results.map((result) => (
-                <tr key={result.teamId}>
+              {results.map((result, index) => (
+                <tr key={result.teamId ?? `result-${index}`}>
                   <th>#{result.rank || "—"} {result.teamName || `第 ${result.teamId} 小隊`}</th>
                   <td>{result.actual.totalCleared}</td>
                   <td>{result.best.totalCleared}</td>
@@ -766,7 +766,7 @@ export default function WorkerMode({ onBack }) {
       {!game ? <p className="mode-loading">讀取遊戲資料中…</p> : (
         <>
           <section className="mode-panel"><h2>第 {game.round} 回合・{game.phase}</h2><p>資料版本 {game.version}</p></section>
-          <section className="mode-panel"><h2>所有小隊目前資料</h2><p>點選一個小隊編輯草稿；完成後回到主畫面底部統一儲存。</p><div className="worker-team-grid">{game.teams.map((team) => {
+          <section className="mode-panel"><h2>所有小隊目前資料</h2><p>點選一個小隊編輯草稿；完成後回到主畫面底部統一儲存。</p><div className="worker-team-grid">{game.teams.map((team, index) => {
             const draftSummary = teamDraftSummaries[String(team.teamId)] ?? {
               increasedLevels: 0,
               decreasedLevels: 0,
@@ -776,7 +776,7 @@ export default function WorkerMode({ onBack }) {
               exceedsLevelGap: false,
             };
             return (
-          <button type="button" className={`worker-team-card${draftSummary.exceedsLevelGap ? " worker-team-card--warning" : ""}`} key={team.teamId} onClick={() => selectTeam(team.teamId)} disabled={busy}>
+          <button type="button" className={`worker-team-card${draftSummary.exceedsLevelGap ? " worker-team-card--warning" : ""}`} key={team.teamId ?? `team-${index}`} onClick={() => selectTeam(team.teamId)} disabled={busy}>
               <strong>#{team.rank || "—"} {team.teamName || `第 ${team.teamId} 小隊`}</strong>
               <span>{team.score} 分</span>
               <span>已解鎖 {team.rosterCount ?? team.roster?.length ?? 0} 隻角色</span>

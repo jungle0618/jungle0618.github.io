@@ -1033,6 +1033,10 @@
     gap: 12px;
   }
 
+  .mobile-shell-view--home > .header-card .header-summary-side {
+    display: contents;
+  }
+
   .mobile-shell-view--home > .header-card .header-summary-label {
     display: block;
     margin-bottom: 8px;

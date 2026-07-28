@@ -62,6 +62,24 @@ export function buildLevelDistribution(roster = []) {
   }, {});
 }
 
+function teamBattleFlagSnapshot(team = {}) {
+  return {
+    teamId: String(team.teamId),
+    turtle_net: team.turtle_net || "",
+    water_park: team.water_park || "",
+    turtleNetEnabled: Boolean(team.turtleNetEnabled),
+    waterParkEnabled: Boolean(team.waterParkEnabled),
+  };
+}
+
+export function createMultiplayerBattleEnvironment(game = {}, teams = []) {
+  return {
+    is_raining: game.gameState?.is_raining || "",
+    isRaining: Boolean(game.gameState?.isRaining),
+    teamFlags: teams.filter(Boolean).map(teamBattleFlagSnapshot),
+  };
+}
+
 /**
  * 玩家取得的多人公開資料：只能看到自己的當前陣容；其他隊只暴露等級分布。
  * 此函式是未來 API 回傳資料的共同契約，避免 UI 意外使用到他隊陣容。

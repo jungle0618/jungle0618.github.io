@@ -12,7 +12,7 @@ import { buildChallengeEncounterTeam } from "../../lib/encounterLogic";
 import { ITEM_ICONS } from "../../lib/assetConfig";
 import { DUO_CLEAR_SCORE, MAX_ROUND } from "../../lib/gameConfig";
 import { compactTeamToRight, configureTeamsFromCollection } from "../../lib/lineupLogic";
-import { buildDuoLineup, hasHiddenSingleTestAchievement, isHigherRankTeamInPairing } from "../../lib/multiplayerLogic";
+import { buildDuoLineup, createMultiplayerBattleEnvironment, hasHiddenSingleTestAchievement, isHigherRankTeamInPairing } from "../../lib/multiplayerLogic";
 import { formatDisplayName } from "../../lib/petCatalog";
 import { buildLevelSeriesScore, calculateLevelScore } from "../../lib/battleScoring";
 import { hydrateMultiplayerRoster, hydrateSavedLineup, multiplayerTeamName, serializeLineup } from "./multiplayerAdapter";
@@ -42,6 +42,14 @@ function savedLineupForChallenge(rows, challenge, roster) {
 
 function savedVersion(rows, challengeId) {
   return Math.max(0, ...rows.filter((row) => String(row.challengeId) === String(challengeId)).map((row) => Number(row.version) || 0));
+}
+
+function activeSpecialEffectLabels(game, team) {
+  if (!team) return [];
+  const labels = [];
+  if (team.turtleNetEnabled) labels.push("烏龜網路：任一我方龜系死亡時，全場其餘龜系也死亡");
+  if (game?.gameState?.isRaining && team.waterParkEnabled) labels.push("公館水樂園：雨天全隊等級 +2");
+  return labels;
 }
 
 export default function MultiplayerMode({ onBack }) {
@@ -132,6 +140,7 @@ export default function MultiplayerMode({ onBack }) {
   const collectionTeams = useMemo(() => editableTeamIndexes.map((index) => activeTeams[index] ?? []), [activeTeams, editableTeamIndexes]);
   const activeCollection = teamEditMode === "pair" ? partnerRoster : roster;
   const cardProps = useMemo(() => ({ formatDisplayName, itemIcons: ITEM_ICONS, StatIcon, showPersistentProgress: true }), []);
+  const activeSpecialEffects = useMemo(() => activeSpecialEffectLabels(game, ownTeam), [game, ownTeam]);
 
   const loadGame = useCallback(async () => {
     const nextGame = await api.loadPlayerGame();
@@ -255,11 +264,18 @@ export default function MultiplayerMode({ onBack }) {
             ? buildDuoLineup(partnerChallengeTeam, ownChallengeTeam)
             : buildDuoLineup(ownChallengeTeam, partnerChallengeTeam))
         : ownChallengeTeam;
+      const environment = createMultiplayerBattleEnvironment(
+        game,
+        challenge.kind === "duo"
+          ? [ownTeam, game?.duoPartner].filter(Boolean)
+          : [ownTeam].filter(Boolean)
+      );
       const challengeReplays = Array.from({ length: challenge.maxBossLevel }, (_, levelIndex) => {
         const level = levelIndex + 1;
         const result = runBattle(
           battleTeam.map((pet) => (pet ? { ...pet } : null)),
-          buildChallengeEncounterTeam(challenge, level)
+          buildChallengeEncounterTeam(challenge, level),
+          { environment }
         );
         return createBattleReplay(result, {
           encounterId: `test-${challenge.id}-${level}`,
@@ -267,6 +283,7 @@ export default function MultiplayerMode({ onBack }) {
           challenge,
           challengeIndex: index,
           bossLevel: level,
+          environment,
           score: calculateLevelScore(result, level, { clearScore: challenge.kind === "duo" ? DUO_CLEAR_SCORE : 1 }),
         });
       });
@@ -347,6 +364,8 @@ export default function MultiplayerMode({ onBack }) {
         totalScore: ownTeam?.score ?? 0,
         title: "多人模式",
         subtitle: ownTeam ? `目前隊伍：${multiplayerTeamName(ownTeam)}` : "",
+        desktopAsideTitle: "生效的特殊卡效果",
+        desktopAsideItems: activeSpecialEffects,
       }}
       teamProps={{
         teams: displayTeams,

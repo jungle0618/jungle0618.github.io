@@ -839,6 +839,28 @@ function applyDeathTeamBuffEffects({ pet, lineup, enemy, ctx, emit, side }) {
   });
 }
 
+function applyTurtleNetCascade({ pet, left, right, ctx, emit, side }) {
+  if (!pet.turtleNetEnabled || !String(pet.name ?? "").includes("龜")) return;
+  [...left, ...right]
+    .filter((unit) => unit !== pet && unit.hp > 0 && String(unit.name ?? "").includes("龜"))
+    .forEach((unit) => {
+      const hpBefore = unit.hp;
+      unit.hp = 0;
+      const unitSide = left.includes(unit) ? "left" : "right";
+      emitEffect(ctx, emit, {
+        type: "turtle_net_cascade_death",
+        side,
+        targetSide: unitSide,
+        source: petBrief(pet),
+        target: petBrief(unit),
+        damageApplied: hpBefore,
+        effectiveDamageToHp: hpBefore,
+        targetHpBefore: hpBefore,
+        targetHpAfter: 0,
+      });
+    });
+}
+
 function applyAnyDeathGrowth({ pet, left, right, ctx, emit }) {
   [...left, ...right].filter((unit) => unit !== pet && unit.hp > 0 && (unit.special?.gainAtkOnAnyDeath || unit.special?.gainHpOnAnyDeath)).forEach((unit) => {
     const atk = Math.floor(unit.special.gainAtkOnAnyDeath ?? 0);
@@ -895,6 +917,7 @@ function applyDeathSplitEffects({ pet, index, lineup, ctx, emit, side }) {
 const DEATH_EFFECT_HANDLERS = [
   applyDeathDamageEffects,
   applyDeathTeamBuffEffects,
+  applyTurtleNetCascade,
   applyAnyDeathGrowth,
   applyDeathSplitEffects,
 ];

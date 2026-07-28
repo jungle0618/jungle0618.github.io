@@ -1,7 +1,7 @@
 import { getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
 import { buildChallengeEncounterTeam } from "../../lib/encounterLogic";
 import { DUO_CLEAR_SCORE } from "../../lib/gameConfig";
-import { buildDuoLineup, resolveDuoPairings } from "../../lib/multiplayerLogic";
+import { buildDuoLineup, createMultiplayerBattleEnvironment, resolveDuoPairings } from "../../lib/multiplayerLogic";
 import { hydrateMultiplayerRoster, hydrateSavedLineup } from "./multiplayerAdapter";
 import { resolveOfficialRound } from "./workerBattleResolver";
 
@@ -28,6 +28,7 @@ export function buildOfficialBattleJobs(game) {
         const higher = teamsById.get(String(pair.higherRankTeamId));
         const lower = teamsById.get(String(pair.lowerRankTeamId));
         const lineup = buildDuoLineup(teamLineup(lower, challenge), teamLineup(higher, challenge));
+        const environment = createMultiplayerBattleEnvironment(game, [higher, lower]);
         for (let level = 1; level <= challenge.maxBossLevel; level += 1) {
           jobs.push({
             battleId: `r${game.round}-${challenge.id}-${pair.pairId}-lv${level}`,
@@ -38,6 +39,7 @@ export function buildOfficialBattleJobs(game) {
             round: game.round,
             bossLevel: level,
             teamIds: [String(higher.teamId), String(lower.teamId)],
+            environment,
             leftTeam: lineup,
             rightTeam: buildChallengeEncounterTeam(challenge, level),
           });
@@ -48,6 +50,7 @@ export function buildOfficialBattleJobs(game) {
 
     game.teams.forEach((team) => {
       const lineup = teamLineup(team, challenge);
+      const environment = createMultiplayerBattleEnvironment(game, [team]);
       for (let level = 1; level <= challenge.maxBossLevel; level += 1) {
         jobs.push({
           battleId: `r${game.round}-${challenge.id}-t${team.teamId}-lv${level}`,
@@ -58,6 +61,7 @@ export function buildOfficialBattleJobs(game) {
           round: game.round,
           bossLevel: level,
           teamIds: [String(team.teamId)],
+          environment,
           leftTeam: lineup,
           rightTeam: buildChallengeEncounterTeam(challenge, level),
         });

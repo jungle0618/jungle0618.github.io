@@ -5,7 +5,7 @@ import { createBattleReplay, runBattle } from "../../lib/battleService";
  * 空格會由共用戰鬥引擎自然略過。計分規則由呼叫端傳入，避免綁死單人分數。
  */
 export function resolveOfficialBattle(job, calculateScore) {
-  const battleResult = runBattle(job.leftTeam, job.rightTeam);
+  const battleResult = runBattle(job.leftTeam, job.rightTeam, { environment: job.environment ?? null });
   const score = calculateScore(battleResult, job);
   return createBattleReplay(battleResult, {
     battleId: job.battleId,
@@ -15,6 +15,7 @@ export function resolveOfficialBattle(job, calculateScore) {
     kind: job.kind,
     round: job.round,
     teamIds: [...(job.teamIds ?? [])],
+    environment: job.environment ?? null,
     score,
   });
 }
