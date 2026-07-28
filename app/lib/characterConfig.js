@@ -89,7 +89,7 @@ export const ENEMY_DEFINITIONS = {
   bombard_pulser: { name: "綿羊", image: "/pet_images/enemies/sheep.png", atk: 3, hp: 10, special: { openingTeamArmor: 3 } },
   high_priest: { name: "企鵝", image: "/pet_images/enemies/penguin.png", atk: 2, hp: 12, special: { roundTeamHeal: 9 } },
   life_chanter: { name: "海豹", image: "/pet_images/enemies/seal.png", atk: 1, hp: 1 },
-  storm_archer: { name: "野馬", image: "/pet_images/enemies/horse.png", atk: 7, hp: 30, special: { attackAll: true } },
+  storm_archer: { name: "野馬", image: "/pet_images/enemies/horse.png", atk: 5, hp: 35, special: { attackAll: true } },
   bombard_opener: { name: "駱駝", image: "/pet_images/enemies/camel.png", atk: 6, hp: 6, special: { openingEnemyAllDamage: 5 } },
   twin_serpent: { name: "鱷魚", image: "/pet_images/enemies/crocodile.png", atk: 6, hp: 30, special: { tripleStrikeDamage: 6, tripleStrikeHitCount: 2 } },
   swarm_boar: { name: "野豬", image: "/pet_images/enemies/pig.png", atk: 7, hp: 20, special: { gainAtkWhenDamaged: 4 } },
