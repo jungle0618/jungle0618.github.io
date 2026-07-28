@@ -3,6 +3,8 @@ import {
   MULTIPLAYER_SINGLE_LINEUP_SIZE,
 } from "./multiplayerConfig";
 
+const HIDDEN_ACHIEVEMENT_SINGLE_NAMES = Object.freeze(["狗", "熊", "兔子", "耳廓狐", "雪貂"]);
+
 function clonePet(pet) {
   return pet ? { ...pet } : null;
 }
@@ -41,6 +43,15 @@ export function buildDuoLineup(lowerRankLineup = [], higherRankLineup = []) {
     ...normalizeLineup(lowerRankLineup, MULTIPLAYER_DUO_CONTRIBUTION_SIZE),
     ...normalizeLineup(higherRankLineup, MULTIPLAYER_DUO_CONTRIBUTION_SIZE),
   ];
+}
+
+export function hasHiddenSingleTestAchievement(lineup = []) {
+  const names = normalizeLineup(lineup, MULTIPLAYER_SINGLE_LINEUP_SIZE)
+    .map((pet) => pet?.name ?? null)
+    .filter(Boolean);
+  if (names.length !== HIDDEN_ACHIEVEMENT_SINGLE_NAMES.length) return false;
+  const uniqueNames = new Set(names);
+  return HIDDEN_ACHIEVEMENT_SINGLE_NAMES.every((name) => uniqueNames.has(name));
 }
 
 export function buildLevelDistribution(roster = []) {

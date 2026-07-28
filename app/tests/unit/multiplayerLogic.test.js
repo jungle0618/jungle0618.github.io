@@ -3,6 +3,7 @@ import {
   buildDuoLineup,
   buildLevelDistribution,
   createPlayerGameView,
+  hasHiddenSingleTestAchievement,
   isHigherRankTeamInPairing,
   normalizeLineup,
   resolveDuoPairings,
@@ -49,6 +50,30 @@ describe("多人模式基礎規則", () => {
     expect(isHigherRankTeamInPairing(game, "1", "8")).toBe(false);
     expect(buildDuoLineup([{ name: "弱隊" }], [{ name: "強隊" }]).map((pet) => pet?.name ?? null))
       .toEqual(["弱隊", null, null, "強隊", null, null]);
+  });
+
+  it("多人單人關測試戰鬥的隱藏成就不看順序，只看五隻是否剛好到齊", () => {
+    expect(hasHiddenSingleTestAchievement([
+      { name: "耳廓狐" },
+      { name: "狗" },
+      { name: "雪貂" },
+      { name: "兔子" },
+      { name: "熊" },
+    ])).toBe(true);
+    expect(hasHiddenSingleTestAchievement([
+      { name: "耳廓狐" },
+      { name: "狗" },
+      { name: "雪貂" },
+      { name: "兔子" },
+      null,
+    ])).toBe(false);
+    expect(hasHiddenSingleTestAchievement([
+      { name: "耳廓狐" },
+      { name: "狗" },
+      { name: "雪貂" },
+      { name: "兔子" },
+      { name: "貓" },
+    ])).toBe(false);
   });
 
   it("雙人正式關優先使用工作表保存的配對快照", () => {

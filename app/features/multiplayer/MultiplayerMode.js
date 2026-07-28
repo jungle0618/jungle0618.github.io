@@ -12,7 +12,7 @@ import { buildChallengeEncounterTeam } from "../../lib/encounterLogic";
 import { ITEM_ICONS } from "../../lib/assetConfig";
 import { DUO_CLEAR_SCORE, MAX_ROUND } from "../../lib/gameConfig";
 import { compactTeamToRight, configureTeamsFromCollection } from "../../lib/lineupLogic";
-import { buildDuoLineup, isHigherRankTeamInPairing } from "../../lib/multiplayerLogic";
+import { buildDuoLineup, hasHiddenSingleTestAchievement, isHigherRankTeamInPairing } from "../../lib/multiplayerLogic";
 import { formatDisplayName } from "../../lib/petCatalog";
 import { buildLevelSeriesScore, calculateLevelScore } from "../../lib/battleScoring";
 import { hydrateMultiplayerRoster, hydrateSavedLineup, multiplayerTeamName, serializeLineup } from "./multiplayerAdapter";
@@ -244,6 +244,9 @@ export default function MultiplayerMode({ onBack }) {
 
   function testBattles() {
     clearDragging();
+    const unlockedHiddenAchievement = challenges.some((challenge, index) =>
+      challenge.kind === "single" && hasHiddenSingleTestAchievement(teams[index] ?? [])
+    );
     const replays = challenges.flatMap((challenge, index) => {
       const ownChallengeTeam = compactTeamToRight(teams[index] ?? [], challenge.teamSize);
       const partnerChallengeTeam = compactTeamToRight((pairingTeams[index] ?? partnerSavedTeams[index] ?? []), challenge.teamSize);
@@ -282,6 +285,7 @@ export default function MultiplayerMode({ onBack }) {
     setBattleReplay(selectedReplay);
     setBossLevel(selectedReplay?.bossLevel ?? 1);
     setGamePhase("battle");
+    setStatus(unlockedHiddenAchievement ? "中了隱藏成就：多人模式單人關測試戰鬥擺出了狗、熊、兔子、耳廓狐、雪貂！" : null);
   }
 
   async function openHistory(battles, historyGroup) {
