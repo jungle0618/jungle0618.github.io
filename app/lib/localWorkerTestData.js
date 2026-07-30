@@ -1,5 +1,5 @@
 import { getChallengeLabel, getMultiplayerRoundChallenges } from "./challengeConfig";
-import { WORKER_ONLY_TEST_CHALLENGES } from "./workerTestConfig";
+import { WORKER_ONLY_TEST_CHALLENGES } from "./workerTestConfig.js";
 
 function scheduledWorkerChallenges() {
   return Array.from({ length: 10 }, (_, index) => getMultiplayerRoundChallenges(index + 1)
