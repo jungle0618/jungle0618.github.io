@@ -593,8 +593,11 @@ function applyRoundGrowthEffects(state) {
         level: pet.level ?? 1,
         tier: pet.tier,
         isEnemy: pet.isEnemy,
-        special: {},
+        special: {
+          deathSourceAtk: Math.max(0, Math.floor(pet.special.roundFrontSummonDeathSourceAtk ?? 0)),
+        },
       }, ctx.nextUid++);
+      summoned.summonSourceUid = pet.uid;
       lineup.splice(index + 1, 0, summoned);
       trigger("round_front_summon", summoned, {
         targetSide: side,
@@ -839,6 +842,23 @@ function applyDeathTeamBuffEffects({ pet, lineup, enemy, ctx, emit, side }) {
   });
 }
 
+function applySummonSourceBuffOnDeath({ pet, lineup, enemy, ctx, emit, side }) {
+  const atk = Math.max(0, Math.floor(pet.special?.deathSourceAtk ?? 0));
+  if (atk <= 0) return;
+  const source = lineup.find((ally) => ally.uid === pet.summonSourceUid && ally.hp > 0);
+  if (!source) return;
+  const atkDelta = buffAtk(source, atk);
+  if (atkDelta <= 0) return;
+  emitEffect(ctx, emit, {
+    type: "summon_death_source_atk",
+    side,
+    source: petBrief(pet),
+    target: petBrief(source),
+    atkDelta,
+    targetAtkAfter: source.atk,
+  });
+}
+
 function applyTurtleNetCascade({ pet, left, right, ctx, emit, side }) {
   if (!pet.turtleNetEnabled || !String(pet.name ?? "").includes("龜")) return;
   [...left, ...right]
@@ -917,6 +937,7 @@ function applyDeathSplitEffects({ pet, index, lineup, ctx, emit, side }) {
 const DEATH_EFFECT_HANDLERS = [
   applyDeathDamageEffects,
   applyDeathTeamBuffEffects,
+  applySummonSourceBuffOnDeath,
   applyTurtleNetCascade,
   applyAnyDeathGrowth,
   applyDeathSplitEffects,

@@ -125,6 +125,9 @@ export function getPetSpecialEffectText(petOrName) {
       + `（${special.roundFrontSummonAtk ?? 0}/${special.roundFrontSummonHp ?? 1}）`
     );
   }
+  if (special.roundFrontSummonDeathSourceAtk) {
+    parts.push(`${special.roundFrontSummonName ?? "召喚物"}死亡時：自身攻擊 +${special.roundFrontSummonDeathSourceAtk}`);
+  }
   if (special.livingEnemyAtkPerUnit && special.livingEnemyHpPerUnit) {
     parts.push(`攻擊力／生命上限為 ${special.livingEnemyAtkPerUnit}／${special.livingEnemyHpPerUnit} × 敵方目前存活角色數`);
   } else if (special.livingEnemyAtkPerUnit) {

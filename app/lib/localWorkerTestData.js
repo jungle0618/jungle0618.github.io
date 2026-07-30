@@ -59,6 +59,7 @@ const WORKER_ONLY_TEST_CHALLENGES = Object.freeze([
             roundFrontSummonImage: "/pet_images/enemies/egg.png",
             roundFrontSummonAtk: 4,
             roundFrontSummonHp: 3,
+            roundFrontSummonDeathSourceAtk: 3,
           },
         },
       ],

@@ -17,6 +17,7 @@ export const ADDITIVE_EFFECT_KEYS = new Set([
   "roundSelfAtkLoss", "roundSelfAtkMinimum",
   "attackArmoredOrDodgeHeal",
   "roundFrontSummonAtk", "roundFrontSummonHp",
+  "roundFrontSummonDeathSourceAtk",
   "livingEnemyAtkPerUnit", "livingEnemyHpPerUnit",
 ]);
 

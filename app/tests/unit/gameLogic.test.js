@@ -1266,6 +1266,7 @@ describe("Solo", () => {
         roundFrontSummonName: "雞蛋",
         roundFrontSummonAtk: 4,
         roundFrontSummonHp: 3,
+        roundFrontSummonDeathSourceAtk: 3,
       }),
     });
 
@@ -1283,6 +1284,16 @@ describe("Solo", () => {
       })
     );
     expect(result.battleFrames[3].rightLineup.map((pet) => pet.name)).toEqual(["母雞", "雞蛋", "雞蛋"]);
+    const henBuffResult = simulateBattle([unit("清蛋者", 4, 1000, { attackAllDamage: 4 })], levelOne);
+    expect(henBuffResult.battleFrames[1].events).toContainEqual(
+      expect.objectContaining({
+        type: "summon_death_source_atk",
+        source: expect.objectContaining({ name: "雞蛋" }),
+        target: expect.objectContaining({ name: "母雞" }),
+        atkDelta: 3,
+        targetAtkAfter: 15,
+      })
+    );
 
     const levelThirty = buildEncounterTeamFromConfig(challenge.encounter, 30);
     expect(levelThirty[0]).toMatchObject({
@@ -1291,6 +1302,7 @@ describe("Solo", () => {
       special: expect.objectContaining({
         roundFrontSummonAtk: 63,
         roundFrontSummonHp: 47,
+        roundFrontSummonDeathSourceAtk: 47,
       }),
     });
   });
