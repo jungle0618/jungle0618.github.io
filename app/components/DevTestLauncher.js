@@ -13,6 +13,7 @@ import { DUO_CLEAR_SCORE, MAX_ROUND } from "../lib/gameConfig";
 import { buildNewPet, formatDisplayName, getPetCompendiumList } from "../lib/petCatalog";
 import { compactTeamToRight, selectRandomTeam } from "../lib/lineupLogic";
 import { buildChallengeEncounterTeam } from "../lib/soloLogic";
+import { getLocalWorkerTestData } from "../lib/localWorkerTestData";
 
 function getTestChallenges(workerTestData = {}) { return workerTestData.challenges ?? []; }
 
@@ -67,7 +68,11 @@ export default function DevTestLauncher({ standalone = false, onBack, workerTest
 }
 
 function DevTestGame({ titleId, closeRef, close, closeLabel, workerTestData, loadAnalysis }) {
-  const challenges = useMemo(() => getTestChallenges(workerTestData), [workerTestData]);
+  const resolvedWorkerTestData = useMemo(
+    () => (workerTestData?.challenges?.length ? workerTestData : getLocalWorkerTestData()),
+    [workerTestData]
+  );
+  const challenges = useMemo(() => getTestChallenges(resolvedWorkerTestData), [resolvedWorkerTestData]);
   const collection = useMemo(
     () => getPetCompendiumList().map((card) => buildNewPet(card, 1)),
     []
@@ -83,15 +88,15 @@ function DevTestGame({ titleId, closeRef, close, closeLabel, workerTestData, loa
   useEffect(() => {
     let cancelled = false;
     setSelectedAnalysis(loadAnalysis ? null : {
-      metrics: workerTestData?.metrics?.[selectedChallenge?.id] ?? null,
-      optimalLineups: workerTestData?.optimalLineups?.[selectedChallenge?.id] ?? [],
-      oneClickLineup: workerTestData?.oneClickLineups?.[selectedChallenge?.id] ?? [],
+      metrics: resolvedWorkerTestData?.metrics?.[selectedChallenge?.id] ?? null,
+      optimalLineups: resolvedWorkerTestData?.optimalLineups?.[selectedChallenge?.id] ?? [],
+      oneClickLineup: resolvedWorkerTestData?.oneClickLineups?.[selectedChallenge?.id] ?? [],
     });
     if (loadAnalysis && selectedChallenge?.id) {
       loadAnalysis(selectedChallenge.id).then((result) => { if (!cancelled) setSelectedAnalysis(result); }).catch(() => { if (!cancelled) setSelectedAnalysis(null); });
     }
     return () => { cancelled = true; };
-  }, [loadAnalysis, selectedChallenge?.id, workerTestData]);
+  }, [loadAnalysis, resolvedWorkerTestData, selectedChallenge?.id]);
   const optimalTeamsByChallenge = useMemo(() => {
     const byName = new Map(collection.map((pet) => [pet.name, pet]));
     return { score: null, teams: (selectedAnalysis?.optimalLineups ?? []).map((lineup) => lineup.map((name) => byName.get(name)).filter(Boolean)) };

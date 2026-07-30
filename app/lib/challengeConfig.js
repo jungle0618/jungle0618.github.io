@@ -1,4 +1,4 @@
-import { DEMO_ENEMY_ENCOUNTERS } from "./characterConfig";
+import { DEMO_ENEMY_ENCOUNTERS, FORMAL_ENEMY_ENCOUNTERS } from "./characterConfig";
 import {
   DUO_CONTRIBUTION_SIZE,
   DEMO_USES_FORMAL_ENCOUNTERS,
@@ -16,7 +16,7 @@ export const CHALLENGE_MODES = Object.freeze({
   MULTIPLAYER: "multiplayer",
 });
 
-let formalEncounterCatalog = [];
+let formalEncounterCatalog = FORMAL_ENEMY_ENCOUNTERS.map((encounter) => cloneEncounter(encounter)).filter(Boolean);
 export { formalEncounterCatalog as GAME_ENCOUNTERS };
 
 function cloneEncounter(encounter) {

@@ -7,7 +7,7 @@ import StatIcon from "../../components/StatIcon";
 import usePointerDrag from "../../hooks/usePointerDrag";
 import useTeamSelectionActions from "../../hooks/useTeamSelectionActions";
 import { createBattleReplay, runBattle } from "../../lib/battleService";
-import { DUO_CHALLENGE_TEAM_SIZE, getChallengeLabel, getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../../lib/challengeConfig";
+import { DUO_CHALLENGE_TEAM_SIZE, getChallengeLabel, getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
 import { buildChallengeEncounterTeam } from "../../lib/encounterLogic";
 import { ITEM_ICONS } from "../../lib/assetConfig";
 import { DUO_CLEAR_SCORE, MAX_ROUND } from "../../lib/gameConfig";
@@ -144,7 +144,6 @@ export default function MultiplayerMode({ onBack }) {
 
   const loadGame = useCallback(async () => {
     const nextGame = await api.loadPlayerGame();
-    setFormalEncounterCatalog(nextGame.formalEncounters ?? []);
     setGame(nextGame);
     setGamePhase("prepare");
     setBattleReplay(null);

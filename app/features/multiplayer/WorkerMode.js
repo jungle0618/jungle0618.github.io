@@ -10,13 +10,14 @@ import BattleSection from "../../components/BattleSection";
 import { calculateOfficialRound, getOfficialLineupVersions } from "./officialRound";
 import { estimateWorkerStrategies } from "./workerStrategyAdvisor";
 import { hydrateMultiplayerRoster, serializeLineup } from "./multiplayerAdapter";
-import { getChallengeLabel, getMultiplayerRoundChallenges, setFormalEncounterCatalog } from "../../lib/challengeConfig";
+import { getChallengeLabel, getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
 import { ITEM_ICONS } from "../../lib/assetConfig";
 import { DRAW_CARDS, INITIAL_ROUND_POOL_NAMES, MAX_LEVEL_GAP, MAX_PET_LEVEL, MAX_ROUND } from "../../lib/gameConfig";
 import { formatDisplayName, getPetCompendiumList } from "../../lib/petCatalog";
 import { configureTeamsFromCollection } from "../../lib/lineupLogic";
 import { applyDrawsToCollection, canDrawPetAtRound, drawPetCards } from "../../lib/cardDrawLogic";
 import { ONCE_PER_GAME_PET_NAMES } from "../../lib/characterConfig";
+import { getLocalWorkerTestData } from "../../lib/localWorkerTestData";
 import StatIcon from "../../components/StatIcon";
 import EnemyScheduleDialog from "../../components/EnemyScheduleDialog";
 import DevTestLauncher from "../../components/DevTestLauncher";
@@ -56,6 +57,47 @@ function buildUsedByChallenge(challenges, drafts) {
       .flatMap((other) => drafts[other.id] ?? [])
       .filter(Boolean)),
   ]));
+}
+
+function petLabelForTeam(team, petName) {
+  const roster = team?.rosterMeta ?? team?.roster ?? [];
+  const pet = roster.find((item) => String(item.petName ?? item.name) === String(petName));
+  return pet?.displayName ?? petName;
+}
+
+function findLineupConflict(team, challenges, drafts) {
+  const challengeById = new Map(challenges.map((challenge) => [challenge.id, challenge]));
+  const lineupEntries = challenges.map((challenge) => [challenge.id, drafts[challenge.id] ?? []]);
+
+  for (const [challengeId, lineup] of lineupEntries) {
+    for (let index = 0; index < lineup.length; index += 1) {
+      const petName = lineup[index];
+      if (!petName) continue;
+      const duplicateIndex = lineup.findIndex((name, lookupIndex) => lookupIndex !== index && name === petName);
+      if (duplicateIndex >= 0) {
+        return {
+          type: "duplicate",
+          petName,
+          petLabel: petLabelForTeam(team, petName),
+          challenge: challengeById.get(challengeId),
+        };
+      }
+      const reusedChallengeId = lineupEntries.find(([otherChallengeId, otherLineup]) =>
+        otherChallengeId !== challengeId && otherLineup.includes(petName)
+      )?.[0];
+      if (reusedChallengeId) {
+        return {
+          type: "reused",
+          petName,
+          petLabel: petLabelForTeam(team, petName),
+          challenge: challengeById.get(challengeId),
+          otherChallenge: challengeById.get(reusedChallengeId),
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 function lineupsMatch(a = [], b = []) {
@@ -305,6 +347,7 @@ function WorkerStrategySection({ results, progress, busy, onRun }) {
 
 export default function WorkerMode({ onBack }) {
   const api = useMemo(() => createMultiplayerApi(), []);
+  const localWorkerTestData = useMemo(() => getLocalWorkerTestData(), []);
   const [session, setSession] = useState(null);
   const [game, setGame] = useState(null);
   const [busy, setBusy] = useState(true);
@@ -377,7 +420,6 @@ export default function WorkerMode({ onBack }) {
 
   const loadGame = useCallback(async () => {
     const nextGame = await api.loadWorkerGame();
-    setFormalEncounterCatalog(nextGame.formalEncounters ?? []);
     setGame(nextGame);
     setTeamLevelDrafts({});
     setTeamLineupDrafts({});
@@ -465,12 +507,8 @@ export default function WorkerMode({ onBack }) {
   }
 
   async function openTestMode() {
-    setBusy(true); setBusyAction("test-data"); setError(null);
-    try {
-      setWorkerTestData(await api.loadWorkerTestData());
-      setTestModeOpen(true);
-    } catch (nextError) { setError(nextError.message); }
-    finally { setBusy(false); setBusyAction(null); }
+    setWorkerTestData(localWorkerTestData);
+    setTestModeOpen(true);
   }
 
   async function resetTeamPassword() {
@@ -550,17 +588,15 @@ export default function WorkerMode({ onBack }) {
     if (!game || !hasPendingChanges) return;
     const lineupValidation = game.teams.map((team) => {
       const drafts = teamLineupDrafts[String(team.teamId)] ?? createLineupDraft(team, challenges);
-      const usedByChallenge = buildUsedByChallenge(challenges, drafts);
-      const invalidChallenge = challenges.find((challenge) => {
-        const lineup = drafts[challenge.id] ?? [];
-        const duplicate = lineup.some((name, index) => name && lineup.indexOf(name) !== index);
-        const reused = lineup.some((name) => name && usedByChallenge[challenge.id].has(name));
-        return duplicate || reused;
-      });
-      return invalidChallenge ? { team, challenge: invalidChallenge } : null;
+      const conflict = findLineupConflict(team, challenges, drafts);
+      return conflict ? { team, ...conflict } : null;
     }).find(Boolean);
     if (lineupValidation) {
-      setError(`第 ${lineupValidation.team.teamId} 小隊的 ${getChallengeLabel(lineupValidation.challenge)} 陣容有重複或跨關重用角色`);
+      if (lineupValidation.type === "duplicate") {
+        setError(`第 ${lineupValidation.team.teamId} 小隊的 ${getChallengeLabel(lineupValidation.challenge)} 陣容中，「${lineupValidation.petLabel}」重複出現`);
+      } else {
+        setError(`第 ${lineupValidation.team.teamId} 小隊的「${lineupValidation.petLabel}」已用於 ${getChallengeLabel(lineupValidation.otherChallenge)}，因此不能再放進 ${getChallengeLabel(lineupValidation.challenge)}`);
+      }
       return;
     }
 
@@ -609,7 +645,6 @@ export default function WorkerMode({ onBack }) {
     setBusy(true); setBusyAction("auto-lineups"); setError(null); setStatus(null);
     try {
       const roundGame = await api.loadWorkerRoundData();
-      setFormalEncounterCatalog(roundGame.formalEncounters ?? []);
       const roundChallenges = getMultiplayerRoundChallenges(roundGame.round).map((challenge) => ({
         ...challenge,
         teamSize: challenge.kind === "duo" ? 3 : challenge.teamSize,
@@ -633,7 +668,6 @@ export default function WorkerMode({ onBack }) {
     setBusy(true); setBusyAction("resolve"); setError(null); setStatus("正在前端計算所有正式戰鬥…");
     try {
       const currentGame = await api.loadWorkerRoundData();
-      setFormalEncounterCatalog(currentGame.formalEncounters ?? []);
       setGame(currentGame);
       const result = calculateOfficialRound(currentGame);
       setStatus(`已完成 ${result.battles.length} 場戰鬥，正在寫入 Google Sheet…`);
@@ -729,8 +763,7 @@ export default function WorkerMode({ onBack }) {
     return (
       <DevTestLauncher
         standalone
-        workerTestData={workerTestData ?? {}}
-        loadAnalysis={(challengeId) => api.loadWorkerAnalysis(challengeId)}
+        workerTestData={workerTestData ?? localWorkerTestData}
         onBack={() => setTestModeOpen(false)}
       />
     );

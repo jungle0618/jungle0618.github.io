@@ -485,7 +485,12 @@ function loadWorkerTestData_() {
 /** 測試模式初始只給關卡目錄；組隊候選與指標按選定關卡另外讀取。 */
 function loadWorkerTestCatalog_() {
   const data = loadWorkerTestData_();
-  return { challenges: data.challenges || [] };
+  return {
+    challenges: data.challenges || [],
+    oneClickLineups: data.oneClickLineups || {},
+    optimalLineups: data.optimalLineups || {},
+    metrics: data.metrics || {},
+  };
 }
 
 function roundKinds_(round) {
@@ -1244,18 +1249,18 @@ function initializeSpreadsheet() {
 
 /**
  * 將本機產生的工人測試資料匯入私人 Sheet。只應由擁有 Sheet 編輯權限的工人執行。
- * dataJson 格式：{"challenges":[],"optimalLineups":{},"metrics":{}}
+ * dataJson 格式：{"challenges":[],"oneClickLineups":{},"optimalLineups":{},"metrics":{}}
  */
 function importWorkerTestData(dataJson) {
   const parsed = JSON.parse(String(dataJson || ""));
-  ["challenges", "optimalLineups", "metrics"].forEach((key) => {
+  ["challenges", "oneClickLineups", "optimalLineups", "metrics"].forEach((key) => {
     if (!(key in parsed)) throw new Error(`缺少 WorkerTestData 欄位：${key}`);
   });
   const sheet = sheet_(SHEETS.workerTestData);
   const existing = Math.max(0, sheet.getLastRow() - 1);
   if (existing) sheet.getRange(2, 1, existing, sheet.getLastColumn()).clearContent();
   const now = new Date().toISOString();
-  const rows = ["challenges", "optimalLineups", "metrics"].map((key) => [key, JSON.stringify(parsed[key]), now]);
+  const rows = ["challenges", "oneClickLineups", "optimalLineups", "metrics"].map((key) => [key, JSON.stringify(parsed[key]), now]);
   sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
   return `已匯入 ${rows.length} 組工人測試資料`;
 }
