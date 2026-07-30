@@ -35,7 +35,7 @@ jobs:
       - name: Build static site
         env:
           # Apps Script deployment URL 是公開 API 位址，不是金鑰。
-          NEXT_PUBLIC_APPS_SCRIPT_URL: https://script.google.com/macros/s/AKfycbzF5IqUbGmG7w6nMAsusHLFPra83a1mvFhq-qxtulhykWePxLuKJltc5tk3zR8lIOKd/exec
+          NEXT_PUBLIC_APPS_SCRIPT_URL: https://script.google.com/macros/s/AKfycbxraDbqDfIF5p0KRolKC5aDiXHy4zO86lGocCZecbfBvv0mzB_7utEM7eKQzOQfAsbm/exec
         run: npm run build
       - name: Prefix public asset URLs for project Pages
         run: |
