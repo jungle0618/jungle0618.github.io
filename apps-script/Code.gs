@@ -1,7 +1,7 @@
 const API_VERSION = "2026-07-28-battle-flags-table-v1";
 const SHEETS = Object.freeze({
   gameState: "GameState", teams: "Teams", roster: "Roster", lineups: "Lineups",
-  pairings: "Pairings", battles: "Battles", workerAuth: "WorkerAuth", workerTestData: "WorkerTestData", encounterData: "EncounterData",
+  pairings: "Pairings", battles: "Battles", workerAuth: "WorkerAuth",
   battleFlags: "BattleFlags",
 });
 const SHEET_HEADERS = Object.freeze({
@@ -12,8 +12,6 @@ const SHEET_HEADERS = Object.freeze({
   Pairings: ["round", "challengeId", "pairId", "higherRankTeamId", "lowerRankTeamId", "createdAt"],
   Battles: ["battleId", "round", "challengeId", "teamIds", "score", "result", "replayJson", "createdAt"],
   WorkerAuth: ["workerId", "passwordHash", "enabled"],
-  WorkerTestData: ["dataKey", "dataJson", "updatedAt"],
-  EncounterData: ["dataKey", "dataJson", "updatedAt"],
   BattleFlags: ["scope", "refId", "turtle_net", "water_park", "is_raining", "updatedAt"],
 });
 const SESSION_SECONDS = 12 * 60 * 60;
@@ -56,7 +54,7 @@ const ROUND_KINDS = [
     "single"
   ],
   [
-    "duo"
+    "single"
   ],
   [
     "single",
@@ -112,11 +110,9 @@ function dispatch_(action, token, payload) {
       const session = requireSession_(token, "team");
       return savePlayerLineups_(String(session.teamId), payload);
     });
-    case "loadWorkerGame": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: true, includeWorkerTestData: false });
-    case "loadWorkerRoundData": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: true, includeWorkerTestData: false });
-    case "loadWorkerTestData": requireSession_(token, "worker"); return loadWorkerTestCatalog_();
+    case "loadWorkerGame": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: true });
+    case "loadWorkerRoundData": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: true });
     case "loadWorkerTeam": return loadWorkerTeam_(payload, requireSession_(token, "worker"));
-    case "loadWorkerAnalysis": return loadWorkerAnalysis_(payload, requireSession_(token, "worker"));
     case "drawRosters": requireSession_(token, "worker"); return withWriteLock_(() => drawRosters_(payload));
     case "setInitialRosters": requireSession_(token, "worker"); return withWriteLock_(() => setInitialRosters_(payload));
     case "updateRosterLevels": requireSession_(token, "worker"); return withWriteLock_(() => updateRosterLevels_(payload));
@@ -363,7 +359,6 @@ function latestLineups_(rows) {
 function loadRawGameState_(options = {}) {
   const includeRosters = options.includeRosters !== false;
   const includeBattles = options.includeBattles !== false;
-  const includeWorkerTestData = options.includeWorkerTestData !== false;
   const states = table_(SHEETS.gameState);
   const teams = table_(SHEETS.teams);
   const roster = table_(SHEETS.roster);
@@ -397,7 +392,6 @@ function loadRawGameState_(options = {}) {
       is_raining: battleFlags.gameState.is_raining || "",
       isRaining: truthySheetValue_(battleFlags.gameState.is_raining),
     },
-    formalEncounters: loadFormalEncounters_(),
     teams: teams.map((team) => {
       const teamRoster = roster.filter((pet) => String(pet.teamId) === String(team.teamId));
       const teamFlags = battleFlags.teamById[String(team.teamId)] || { turtle_net: "", water_park: "" };
@@ -433,67 +427,6 @@ function loadRawGameState_(options = {}) {
       : [],
     battles: includeBattles ? battleHistory : [],
     ...(includeBattles ? { battleHistory } : {}),
-    ...(includeWorkerTestData ? { workerTestData: loadWorkerTestData_() } : {}),
-  };
-}
-
-function loadEncounterData_() {
-  const result = {};
-  table_(SHEETS.encounterData).forEach((row) => {
-    if (!row.dataKey || !row.dataJson) return;
-    try {
-      result[String(row.dataKey)] = JSON.parse(String(row.dataJson));
-    } catch (error) {
-      throw apiError_("INVALID_ENCOUNTER_DATA", `EncounterData 的 ${row.dataKey} JSON 格式錯誤`, 500);
-    }
-  });
-  return result;
-}
-
-function loadFormalEncounters_() {
-  const workerChallenges = loadWorkerTestData_().challenges || [];
-  if (Array.isArray(workerChallenges) && workerChallenges.length) {
-    const byId = new Map(workerChallenges.map((challenge) => [String(challenge.id || ""), challenge]));
-    const encounters = [];
-    ROUND_KINDS.forEach((kinds, roundIndex) => {
-      kinds.forEach((kind, index) => {
-        const challengeId = challengeId_(roundIndex + 1, index, kind);
-        const challenge = byId.get(challengeId);
-        if (!challenge || !challenge.encounter) {
-          throw apiError_("INVALID_WORKER_TEST_DATA", `WorkerTestData 缺少正式關卡 ${challengeId} 的 encounter`, 500);
-        }
-        encounters.push(challenge.encounter);
-      });
-    });
-    return encounters;
-  }
-  const encounters = loadEncounterData_().formalEncounters || [];
-  if (!Array.isArray(encounters)) throw apiError_("INVALID_ENCOUNTER_DATA", "formalEncounters 必須是陣列", 500);
-  return encounters;
-}
-
-/** 工人測試資料只從私人 Google Sheet 讀取；絕不放入公開玩家回應。 */
-function loadWorkerTestData_() {
-  const result = {};
-  table_(SHEETS.workerTestData).forEach((row) => {
-    if (!row.dataKey || !row.dataJson) return;
-    try {
-      result[String(row.dataKey)] = JSON.parse(String(row.dataJson));
-    } catch (error) {
-      throw apiError_("INVALID_WORKER_TEST_DATA", `WorkerTestData 的 ${row.dataKey} JSON 格式錯誤`, 500);
-    }
-  });
-  return result;
-}
-
-/** 測試模式初始只給關卡目錄；組隊候選與指標按選定關卡另外讀取。 */
-function loadWorkerTestCatalog_() {
-  const data = loadWorkerTestData_();
-  return {
-    challenges: data.challenges || [],
-    oneClickLineups: data.oneClickLineups || {},
-    optimalLineups: data.optimalLineups || {},
-    metrics: data.metrics || {},
   };
 }
 
@@ -583,7 +516,7 @@ function levelDistribution_(roster) {
 function loadPlayerGame_(session, payload) {
   if (session.role === "worker") {
     const requestedTeamId = String(payload && payload.teamId || "");
-    if (!requestedTeamId) return loadRawGameState_({ includeRosters: true, includeBattles: true, includeWorkerTestData: false });
+    if (!requestedTeamId) return loadRawGameState_({ includeRosters: true, includeBattles: true });
     return loadWorkerTeam_({ teamId: requestedTeamId }, session);
   }
   const game = loadRawGameState_();
@@ -599,7 +532,6 @@ function loadPlayerGame_(session, payload) {
   return {
     round: game.round, phase: game.phase, version: game.version, viewerTeamId: session.teamId,
     gameState: game.gameState,
-    formalEncounters: game.formalEncounters,
     pairings: game.pairings,
     roster: visibleRoster,
     lineups: visibleLineups,
@@ -669,18 +601,6 @@ function loadWorkerTeam_(payload) {
   const team = game.teams.find((item) => String(item.teamId) === teamId);
   if (!team) throw apiError_("TEAM_NOT_FOUND", "找不到隊伍", 404);
   return { round: game.round, version: game.version, team };
-}
-
-function loadWorkerAnalysis_(payload) {
-  const challengeId = String(payload.challengeId || "");
-  if (!challengeId) throw apiError_("CHALLENGE_REQUIRED", "缺少關卡編號", 400);
-  const data = loadWorkerTestData_();
-  return {
-    challengeId,
-    metrics: data.metrics && data.metrics[challengeId] || null,
-    optimalLineups: data.optimalLineups && data.optimalLineups[challengeId] || [],
-    oneClickLineup: data.oneClickLineups && data.oneClickLineups[challengeId] || [],
-  };
 }
 
 function resetTeamPassword_(payload) {
@@ -1262,7 +1182,7 @@ function setupProjectFromScratch() {
     spreadsheetId: spreadsheet.getId(),
     teams: MULTIPLAYER_TEAM_COUNT,
     workerId: "worker",
-    nextStep: "執行 importWorkerTestData(dataJson) 匯入 WorkerTestData",
+    nextStep: "如需特殊卡旗標，請建立 BattleFlags 工作表並填入資料",
   };
 }
 
@@ -1322,59 +1242,6 @@ function initializeSpreadsheet() {
     sheet.setFrozenRows(1);
   });
   sheet_(SHEETS.gameState).getRange(2, 1, 1, 4).setValues([[1, "prepare", 1, new Date().toISOString()]]);
-}
-
-/**
- * 將本機產生的工人測試資料匯入私人 Sheet。只應由擁有 Sheet 編輯權限的工人執行。
- * dataJson 格式：{"challenges":[],"oneClickLineups":{},"optimalLineups":{},"metrics":{}}
- */
-function importWorkerTestData(dataJson) {
-  const parsed = JSON.parse(String(dataJson || ""));
-  ["challenges", "oneClickLineups", "optimalLineups", "metrics"].forEach((key) => {
-    if (!(key in parsed)) throw new Error(`缺少 WorkerTestData 欄位：${key}`);
-  });
-  const sheet = sheet_(SHEETS.workerTestData);
-  const existing = Math.max(0, sheet.getLastRow() - 1);
-  if (existing) sheet.getRange(2, 1, existing, sheet.getLastColumn()).clearContent();
-  const now = new Date().toISOString();
-  const rows = ["challenges", "oneClickLineups", "optimalLineups", "metrics"].map((key) => [key, JSON.stringify(parsed[key]), now]);
-  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-  return `已匯入 ${rows.length} 組工人測試資料`;
-}
-
-/**
- * dataJson 格式：{"formalEncounters":[]}
- */
-function importFormalEncounterData(dataJson) {
-  const parsed = JSON.parse(String(dataJson || ""));
-  if (!Array.isArray(parsed.formalEncounters)) throw new Error("缺少 EncounterData 欄位：formalEncounters");
-  const sheet = sheet_(SHEETS.encounterData);
-  const existing = Math.max(0, sheet.getLastRow() - 1);
-  if (existing) sheet.getRange(2, 1, existing, sheet.getLastColumn()).clearContent();
-  const now = new Date().toISOString();
-  sheet.getRange(2, 1, 1, 3).setValues([["formalEncounters", JSON.stringify(parsed.formalEncounters), now]]);
-  return `已匯入 ${parsed.formalEncounters.length} 個正式關卡`;
-}
-
-/** 既有遊戲只新增 WorkerTestData，不清除其他工作表。 */
-function addWorkerTestDataSheet() {
-  const spreadsheet = spreadsheet_();
-  const headers = SHEET_HEADERS.WorkerTestData;
-  const sheet = spreadsheet.getSheetByName(SHEETS.workerTestData) || spreadsheet.insertSheet(SHEETS.workerTestData);
-  if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.setFrozenRows(1);
-  }
-  return "WorkerTestData 工作表已建立";
-}
-
-function addEncounterDataSheet() {
-  const spreadsheet = spreadsheet_();
-  const headers = SHEET_HEADERS.EncounterData;
-  const sheet = spreadsheet.getSheetByName(SHEETS.encounterData) || spreadsheet.insertSheet(SHEETS.encounterData);
-  sheet.clear();
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  return "EncounterData 工作表已建立";
 }
 
 function addBattleFlagsSheet() {

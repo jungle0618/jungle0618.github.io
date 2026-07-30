@@ -835,12 +835,12 @@ describe("Solo", () => {
     expect(randomish.rightRemaining).toBeGreaterThan(0);
   });
 
-  it("每個正式關卡使用不同的敵人陣容", () => {
+  it("正式關卡排程可重複使用部分敵人陣容", () => {
     const challenges = Array.from({ length: 10 }, (_, index) => getMultiplayerRoundChallenges(index + 1)).flat();
     const lineupKeys = challenges.map((challenge) => (challenge.encounter.enemyIds ?? challenge.encounter.enemies?.map((enemy) => enemy.id)).join("|"));
     expect(SOLO_ENCOUNTERS).toHaveLength(14);
     expect(challenges).toHaveLength(14);
-    expect(new Set(lineupKeys).size).toBe(challenges.length);
+    expect(new Set(lineupKeys).size).toBe(12);
     const encounterSizes = SOLO_ENCOUNTERS.map((encounter) => (encounter.enemyIds ?? encounter.enemies ?? []).length);
     expect(encounterSizes).toEqual([1, 3, 2, 2, 3, 2, 3, 2, 1, 2, 3, 1, 1, 3]);
     expect(encounterSizes.filter((size) => size >= 3)).toHaveLength(5);
@@ -849,7 +849,7 @@ describe("Solo", () => {
       const special = ENEMY_DEFINITIONS[enemyId]?.special ?? {};
       return special.attackAll || special.openingEnemyAllDamage || special.deathEnemyAllDamage || special.cleaveFrontTwo;
     }));
-    expect(rangeDamageEncounters).toHaveLength(4);
+    expect(rangeDamageEncounters).toHaveLength(5);
     expect(buildEncounterTeam(1, 1)[0].special).toEqual({});
     expect(buildEncounterTeamByName("泉庭誘餌").map((enemy) => enemy.name)).toEqual(["海豹", "企鵝", "無尾熊"]);
   });

@@ -226,49 +226,6 @@ function buildUpdatedRoundSchedule(desiredSchedule, originalMaps, reportMap) {
   }));
 }
 
-function buildWorkerChallenges(roundChallengeSchedule) {
-  return roundChallengeSchedule.flatMap((roundEntries, roundIndex) => roundEntries.map((entry, slotIndex) => ({
-    id: entry.challengeId,
-    round: roundIndex + 1,
-    index: slotIndex,
-    kind: entry.kind,
-    encounter: {
-      ...(FORMAL_ENCOUNTER_SEED[entry.multiplayerEncounterRound - 1] ?? {}),
-    },
-    teamSize: entry.kind === "duo" ? 6 : 5,
-    maxBossLevel: 30,
-    scoreEnabled: true,
-    testRound: roundIndex + 1,
-    kindLabel: entry.kind === "duo" ? "雙人關" : "單人關",
-    label: `${entry.kind === "duo" ? "雙人關" : "單人關"}｜${entry.name}`,
-  })));
-}
-
-function buildWorkerOptimalLineups(roundChallengeSchedule) {
-  const entries = roundChallengeSchedule.flat();
-  return Object.fromEntries(entries.map((entry) => [entry.challengeId, [entry.bestLineup]]));
-}
-
-function buildWorkerOneClickLineups(roundChallengeSchedule) {
-  const entries = roundChallengeSchedule.flat();
-  return Object.fromEntries(entries.map((entry) => [entry.challengeId, entry.bestLineup]));
-}
-
-function buildWorkerMetrics(roundChallengeSchedule, reportMap) {
-  const entries = roundChallengeSchedule.flat();
-  return Object.fromEntries(entries.map((entry) => {
-    const report = reportMap.get(entry.name);
-    return [entry.challengeId, Object.fromEntries((report?.metricRows ?? []).map((row) => [
-      row.name,
-      {
-        shapley: row.shapleyValue,
-        coreLoss: row.coreLoss,
-        nearBestRate: row.nearBestRate * 100,
-      },
-    ]))];
-  }));
-}
-
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
@@ -286,33 +243,23 @@ function main() {
   const singleOrder = attachMetadata(desired.singleOrder, "single", originalMaps, reportMap);
   const duoOrder = attachMetadata(desired.duoOrder, "duo", originalMaps, reportMap);
   const roundChallengeSchedule = buildUpdatedRoundSchedule(desired.roundChallengeSchedule, originalMaps, reportMap);
-  const workerTestData = {
-    challenges: buildWorkerChallenges(roundChallengeSchedule),
-    oneClickLineups: buildWorkerOneClickLineups(roundChallengeSchedule),
-    optimalLineups: buildWorkerOptimalLineups(roundChallengeSchedule),
-    metrics: buildWorkerMetrics(roundChallengeSchedule, reportMap),
-  };
 
   ensureDir(options.outputDir);
   const singlePath = path.join(options.outputDir, "single-order.updated.json");
   const duoPath = path.join(options.outputDir, "duo-order.updated.json");
   const schedulePath = path.join(options.outputDir, "round-challenge-schedule.updated.json");
-  const workerPath = path.join(options.outputDir, "worker-test-data.updated.json");
 
   writeJson(singlePath, { singleOrder });
   writeJson(duoPath, { duoOrder });
   writeJson(schedulePath, { roundChallengeSchedule });
-  writeJson(workerPath, workerTestData);
 
   console.log(JSON.stringify({
     singlePath,
     duoPath,
     schedulePath,
-    workerPath,
     singleCount: singleOrder.length,
     duoCount: duoOrder.length,
     roundCount: roundChallengeSchedule.length,
-    workerChallengeCount: workerTestData.challenges.length,
   }, null, 2));
 }
 

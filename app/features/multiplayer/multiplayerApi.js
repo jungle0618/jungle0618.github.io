@@ -85,9 +85,7 @@ export function createMultiplayerApi(fetchImpl = fetch) {
     savePlayerLineups(payload) { return request(fetchImpl, "savePlayerLineups", payload); },
     loadWorkerGame() { return request(fetchImpl, "loadWorkerGame"); },
     loadWorkerRoundData() { return request(fetchImpl, "loadWorkerRoundData"); },
-    loadWorkerTestData() { return request(fetchImpl, "loadWorkerTestData"); },
     loadWorkerTeam(teamId) { return request(fetchImpl, "loadWorkerTeam", { teamId }); },
-    loadWorkerAnalysis(challengeId) { return request(fetchImpl, "loadWorkerAnalysis", { challengeId }); },
     drawRosters(payload) { return request(fetchImpl, "drawRosters", payload); },
     setInitialRosters(payload) { return request(fetchImpl, "setInitialRosters", payload); },
     async saveOfficialRound(payload) {

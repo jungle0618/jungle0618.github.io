@@ -17,7 +17,7 @@ import { getLocalWorkerTestData } from "../lib/localWorkerTestData";
 
 function getTestChallenges(workerTestData = {}) { return workerTestData.challenges ?? []; }
 
-export default function DevTestLauncher({ standalone = false, onBack, workerTestData = {}, loadAnalysis }) {
+export default function DevTestLauncher({ standalone = false, onBack }) {
   const [open, setOpen] = useState(standalone);
   const closeRef = useRef(null);
   const titleId = useId();
@@ -42,8 +42,6 @@ export default function DevTestLauncher({ standalone = false, onBack, workerTest
       closeRef={closeRef}
       close={close}
       closeLabel={standalone ? "回工人模式" : "關閉"}
-      workerTestData={workerTestData}
-      loadAnalysis={loadAnalysis}
     />
   ) : null;
 
@@ -67,11 +65,8 @@ export default function DevTestLauncher({ standalone = false, onBack, workerTest
   );
 }
 
-function DevTestGame({ titleId, closeRef, close, closeLabel, workerTestData, loadAnalysis }) {
-  const resolvedWorkerTestData = useMemo(
-    () => (workerTestData?.challenges?.length ? workerTestData : getLocalWorkerTestData()),
-    [workerTestData]
-  );
+function DevTestGame({ titleId, closeRef, close, closeLabel }) {
+  const resolvedWorkerTestData = useMemo(() => getLocalWorkerTestData(), []);
   const challenges = useMemo(() => getTestChallenges(resolvedWorkerTestData), [resolvedWorkerTestData]);
   const collection = useMemo(
     () => getPetCompendiumList().map((card) => buildNewPet(card, 1)),
@@ -83,24 +78,6 @@ function DevTestGame({ titleId, closeRef, close, closeLabel, workerTestData, loa
   const [team, setTeam] = useState(() => Array(selectedChallenge?.teamSize ?? 6).fill(null));
   const [battleReplay, setBattleReplay] = useState(null);
   const [battleReplays, setBattleReplays] = useState([]);
-  const [showCardMetrics, setShowCardMetrics] = useState(false);
-  const [selectedAnalysis, setSelectedAnalysis] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    setSelectedAnalysis(loadAnalysis ? null : {
-      metrics: resolvedWorkerTestData?.metrics?.[selectedChallenge?.id] ?? null,
-      optimalLineups: resolvedWorkerTestData?.optimalLineups?.[selectedChallenge?.id] ?? [],
-      oneClickLineup: resolvedWorkerTestData?.oneClickLineups?.[selectedChallenge?.id] ?? [],
-    });
-    if (loadAnalysis && selectedChallenge?.id) {
-      loadAnalysis(selectedChallenge.id).then((result) => { if (!cancelled) setSelectedAnalysis(result); }).catch(() => { if (!cancelled) setSelectedAnalysis(null); });
-    }
-    return () => { cancelled = true; };
-  }, [loadAnalysis, resolvedWorkerTestData, selectedChallenge?.id]);
-  const optimalTeamsByChallenge = useMemo(() => {
-    const byName = new Map(collection.map((pet) => [pet.name, pet]));
-    return { score: null, teams: (selectedAnalysis?.optimalLineups ?? []).map((lineup) => lineup.map((name) => byName.get(name)).filter(Boolean)) };
-  }, [collection, selectedAnalysis]);
   const [compendiumPet, setCompendiumPet] = useState(null);
   const [selectedBossLevel, setSelectedBossLevel] = useState(1);
   const cardProps = useMemo(() => ({ formatDisplayName, itemIcons: ITEM_ICONS, StatIcon }), []);
@@ -127,7 +104,6 @@ function DevTestGame({ titleId, closeRef, close, closeLabel, workerTestData, loa
     setBattleReplay(null);
     setBattleReplays([]);
     setSelectedBossLevel(1);
-    setShowCardMetrics(false);
   }, [clearDragging, selectedChallenge]);
 
   const onPointerDownTeamPet = useCallback((teamIndex, slotIndex, event) => {
@@ -148,33 +124,10 @@ function DevTestGame({ titleId, closeRef, close, closeLabel, workerTestData, loa
     );
   }, [onDropToSlot, phase, startPointerDrag]);
 
-  const autoConfigureTeam = useCallback(() => {
-    clearDragging();
-    const names = selectedAnalysis?.oneClickLineup ?? [];
-    const byName = new Map(collection.map((pet) => [pet.name, pet]));
-    setTeamValue(compactTeamToRight(names.map((name) => byName.get(name)).filter(Boolean), selectedChallenge.teamSize));
-  }, [clearDragging, collection, selectedChallenge.id, selectedChallenge.teamSize, setTeamValue, selectedAnalysis]);
-
   const randomConfigureTeam = useCallback(() => {
     clearDragging();
     setTeamValue(selectRandomTeam(collection, selectedChallenge.teamSize));
   }, [clearDragging, collection, selectedChallenge.teamSize, setTeamValue]);
-
-  const optimalCandidates = optimalTeamsByChallenge.teams ?? [];
-  const selectedMetrics = selectedAnalysis?.metrics ?? null;
-  const metricRows = selectedMetrics
-    ? Object.entries(selectedMetrics).sort(([, left], [, right]) =>
-      right.nearBestRate - left.nearBestRate ||
-      right.coreLoss - left.coreLoss ||
-      right.shapley - left.shapley
-    )
-    : [];
-  const optimalConfigureTeam = useCallback(() => {
-    if (!optimalCandidates.length) return;
-    clearDragging();
-    const selected = optimalCandidates[Math.floor(Math.random() * optimalCandidates.length)];
-    setTeamValue(selected.map((pet) => (pet ? { ...pet } : null)));
-  }, [clearDragging, optimalCandidates, setTeamValue]);
 
   const runAllLevels = useCallback(() => {
     const compactedTeam = compactTeamToRight(team, selectedChallenge.teamSize);
@@ -246,10 +199,6 @@ function DevTestGame({ titleId, closeRef, close, closeLabel, workerTestData, loa
           draggedItem,
           dragHoverTarget,
           onPointerDownTeamPet,
-          onAutoConfigureTeam: autoConfigureTeam,
-          autoConfigureDisabled: !(selectedAnalysis?.oneClickLineup?.length),
-          onOptimalConfigureTeam: optimalConfigureTeam,
-          optimalConfigureDisabled: optimalCandidates.length === 0,
           onRandomConfigureTeam: randomConfigureTeam,
         }}
         collectionProps={{
@@ -314,53 +263,8 @@ function DevTestGame({ titleId, closeRef, close, closeLabel, workerTestData, loa
             </select>
           </label>
           <small>我方全角色固定 Lv.1</small>
-          <button type="button" onClick={() => setShowCardMetrics(true)}>查看角色指標</button>
           <button ref={closeRef} type="button" onClick={close}>{closeLabel}</button>
         </div>
-        {showCardMetrics ? (
-          <div
-            className="dev-test-metrics-backdrop"
-            role="presentation"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setShowCardMetrics(false);
-            }}
-          >
-            <section className="dev-test-metrics-dialog" role="dialog" aria-modal="true" aria-labelledby="dev-test-metrics-title">
-              <div className="dev-test-metrics-dialog__header">
-                <div>
-                  <span>FORMAL CARD VALUES</span>
-                  <h2 id="dev-test-metrics-title">{selectedChallenge.label}</h2>
-                </div>
-                <button type="button" onClick={() => setShowCardMetrics(false)}>關閉</button>
-              </div>
-              {selectedMetrics ? (
-                <>
-                  <p className="dev-test-metrics-dialog__hint">依近最佳選用率排序；核心禁用損失越高，代表角色越難被替代。</p>
-                  <div className="dev-test-metrics-table-wrap">
-                    <table className="dev-test-metrics-table">
-                      <thead>
-                        <tr><th>排名</th><th>角色</th><th>Shapley</th><th>核心禁用損失</th><th>近最佳選用率</th></tr>
-                      </thead>
-                      <tbody>
-                        {metricRows.map(([name, row], index) => (
-                          <tr key={name}>
-                            <td>{index + 1}</td>
-                            <th scope="row">{name}</th>
-                            <td>{row.shapley.toFixed(3)}</td>
-                            <td>{row.coreLoss}</td>
-                            <td>{row.nearBestRate.toFixed(1)}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              ) : (
-                <p className="dev-test-metrics-dialog__empty">此工人特別測試關目前沒有對應的 formal-card-values 主線數據。</p>
-              )}
-            </section>
-          </div>
-        ) : null}
       </GameShell>
     </div>
   );

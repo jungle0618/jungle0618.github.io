@@ -17,7 +17,6 @@ import { formatDisplayName, getPetCompendiumList } from "../../lib/petCatalog";
 import { configureTeamsFromCollection } from "../../lib/lineupLogic";
 import { applyDrawsToCollection, canDrawPetAtRound, drawPetCards } from "../../lib/cardDrawLogic";
 import { ONCE_PER_GAME_PET_NAMES } from "../../lib/characterConfig";
-import { getLocalWorkerTestData } from "../../lib/localWorkerTestData";
 import StatIcon from "../../components/StatIcon";
 import EnemyScheduleDialog from "../../components/EnemyScheduleDialog";
 import DevTestLauncher from "../../components/DevTestLauncher";
@@ -347,7 +346,6 @@ function WorkerStrategySection({ results, progress, busy, onRun }) {
 
 export default function WorkerMode({ onBack }) {
   const api = useMemo(() => createMultiplayerApi(), []);
-  const localWorkerTestData = useMemo(() => getLocalWorkerTestData(), []);
   const [session, setSession] = useState(null);
   const [game, setGame] = useState(null);
   const [busy, setBusy] = useState(true);
@@ -358,7 +356,6 @@ export default function WorkerMode({ onBack }) {
   const [allLineupsOpen, setAllLineupsOpen] = useState(false);
   const [enemyScheduleOpen, setEnemyScheduleOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState(null);
-  const [workerTestData, setWorkerTestData] = useState(null);
   const [testModeOpen, setTestModeOpen] = useState(false);
   const [battleReplay, setBattleReplay] = useState(null);
   const [battleReplays, setBattleReplays] = useState([]);
@@ -507,7 +504,6 @@ export default function WorkerMode({ onBack }) {
   }
 
   async function openTestMode() {
-    setWorkerTestData(localWorkerTestData);
     setTestModeOpen(true);
   }
 
@@ -763,7 +759,6 @@ export default function WorkerMode({ onBack }) {
     return (
       <DevTestLauncher
         standalone
-        workerTestData={workerTestData ?? localWorkerTestData}
         onBack={() => setTestModeOpen(false)}
       />
     );

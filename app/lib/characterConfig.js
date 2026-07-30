@@ -152,7 +152,7 @@ export const FORMAL_ENEMY_ENCOUNTERS = [
   { name: "封攻長城", description: "電鰻封鎖前排攻擊，陸龜以護甲拖延戰鬥。", enemyIds: ["attack_sealer", "shell_guard"] },
   { name: "霧沼三震", description: "開戰三段全體傷害後進入奇數回合閃避節奏。", enemyIds: ["shadow_assassin"] },
   { name: "存活威壓", description: "猴子與水獺依序排列；猴子攻擊力與生命上限為 6 × 我方目前存活角色數，水獺為 5/40 白板。", enemyIds: ["worker_living_enemy_power", "worker_living_enemy_guard"] },
-  { name: "誘餌獵場", description: "後排治療核心、高攻中衛與低生命前衛組成多線壓力；跳蛛、獨角仙與蜜獾各有發揮空間，但一般輸出也能通關。", enemyIds: ["sleepy_healer", "swarm_piranha", "endless_colossus"] },
+  { name: "爆羽鬥獸", description: "中央爆破會餵養兩側鬣狗，擊殺順序會改變戰局。", enemyIds: ["sweep_brute", "bombard_martyr", "sweep_brute"] },
   { name: "孵蛋母雞", description: "母雞持續在前方孵化雞蛋，考驗清場速度與前線壓力控制。", enemies: [{ id: "worker_summoning_hen", name: "母雞", image: "/pet_images/enemies/hen.png", atk: 12, hp: 40, special: { roundFrontSummonEvery: 2, roundFrontSummonName: "雞蛋", roundFrontSummonImage: "/pet_images/enemies/egg.png", roundFrontSummonAtk: 4, roundFrontSummonHp: 3 } }] },
   { name: "死亡分裂", description: "羚羊死亡時分裂成兩個較弱個體，考驗範圍傷害與持續作戰。", enemyIds: ["worker_survival_splitter"] },
   { name: "駝羽風暴", description: "開場轟炸、死亡爆破與範圍普攻形成三種不同傷害波段。", enemyIds: ["storm_archer", "bombard_opener", "bombard_martyr"] },
