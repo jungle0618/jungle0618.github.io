@@ -82,6 +82,7 @@ export function createMultiplayerApi(fetchImpl = fetch) {
     loadBattleReplays(battleIds) { return requestInChunks(fetchImpl, "loadBattleReplays", battleIds); },
     loadChallengeBattles(payload) { return request(fetchImpl, "loadChallengeBattles", payload); },
     saveLineup(payload) { return request(fetchImpl, "saveLineup", payload); },
+    savePlayerLineups(payload) { return request(fetchImpl, "savePlayerLineups", payload); },
     loadWorkerGame() { return request(fetchImpl, "loadWorkerGame"); },
     loadWorkerRoundData() { return request(fetchImpl, "loadWorkerRoundData"); },
     loadWorkerTestData() { return request(fetchImpl, "loadWorkerTestData"); },

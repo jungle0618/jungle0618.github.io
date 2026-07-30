@@ -230,14 +230,14 @@ export default function MultiplayerMode({ onBack }) {
   async function saveLineups() {
     setBusy(true); setBusyAction("save"); setError(null);
     try {
-      for (const [index, challenge] of challenges.entries()) {
-        await api.saveLineup({
-          round: game.round,
+      await api.savePlayerLineups({
+        round: game.round,
+        lineupUpdates: challenges.map((challenge, index) => ({
           challengeId: challenge.id,
           lineup: serializeLineup(teams[index] ?? [], challenge.teamSize),
           version: savedVersion(ownTeam.currentLineups ?? [], challenge.id),
-        });
-      }
+        })),
+      });
       await loadGame();
       setStatus("陣容已儲存到伺服器");
     } catch (nextError) { setError(nextError.message); } finally { setBusy(false); setBusyAction(null); }

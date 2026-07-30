@@ -108,6 +108,10 @@ function dispatch_(action, token, payload) {
       if (!teamId) throw apiError_("TEAM_REQUIRED", "缺少隊伍編號", 400);
       return saveLineup_(teamId, payload);
     });
+    case "savePlayerLineups": return withWriteLock_(() => {
+      const session = requireSession_(token, "team");
+      return savePlayerLineups_(String(session.teamId), payload);
+    });
     case "loadWorkerGame": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: true, includeWorkerTestData: false });
     case "loadWorkerRoundData": requireSession_(token, "worker"); return loadRawGameState_({ includeRosters: true, includeBattles: true, includeWorkerTestData: false });
     case "loadWorkerTestData": requireSession_(token, "worker"); return loadWorkerTestCatalog_();
@@ -718,6 +722,79 @@ function saveLineup_(teamId, payload) {
   const now = new Date().toISOString();
   appendRows_(SHEETS.lineups, payload.lineup.map((name, index) => [round, String(payload.challengeId), String(teamId), index, name || "", nextVersion, now]));
   return { ok: true, version: nextVersion, updatedAt: now };
+}
+
+function savePlayerLineups_(teamId, payload) {
+  const game = loadRawGameState_();
+  if (Number(payload.round) !== game.round || !Array.isArray(payload.lineupUpdates)) {
+    throw apiError_("VERSION_CONFLICT", "回合已變更，請重新載入", 409);
+  }
+
+  const team = game.teams.find((item) => String(item.teamId) === String(teamId));
+  if (!team) throw apiError_("TEAM_NOT_FOUND", "找不到小隊", 404);
+
+  const lineupUpdates = payload.lineupUpdates;
+  const challengeIds = lineupUpdates.map((update) => String(update.challengeId || ""));
+  if (challengeIds.some((challengeId) => !challengeId) || new Set(challengeIds).size !== challengeIds.length) {
+    throw apiError_("INVALID_LINEUP", "關卡資料不可為空或重複", 400);
+  }
+
+  const kinds = roundKinds_(game.round);
+  const lineupRows = table_(SHEETS.lineups);
+  const finalLineupsByChallenge = {};
+
+  kinds.forEach((kind, index) => {
+    const challengeId = challengeId_(game.round, index, kind);
+    const slotCount = kind === "duo" ? DUO_CONTRIBUTION_SIZE : SINGLE_TEAM_SIZE;
+    finalLineupsByChallenge[challengeId] = getLineupSlots_(team.currentLineups, challengeId, slotCount);
+  });
+
+  lineupUpdates.forEach((update) => {
+    const challengeId = String(update.challengeId);
+    const kindIndex = kinds.findIndex((kind, index) => challengeId_(game.round, index, kind) === challengeId);
+    if (kindIndex < 0 || !Array.isArray(update.lineup)) throw apiError_("INVALID_LINEUP", "陣容資料格式錯誤", 400);
+    const expectedSize = kinds[kindIndex] === "duo" ? DUO_CONTRIBUTION_SIZE : SINGLE_TEAM_SIZE;
+    if (update.lineup.length !== expectedSize) throw apiError_("INVALID_LINEUP", "陣容格數錯誤", 400);
+    finalLineupsByChallenge[challengeId] = update.lineup.map((name) => name ? String(name) : "");
+  });
+
+  const roster = table_(SHEETS.roster).filter((pet) => String(pet.teamId) === String(teamId));
+  const owned = new Set(roster.filter((pet) => (Number(pet.level) || 0) > 0).map((pet) => String(pet.petName)));
+  const consumed = new Set(roster.filter(isConsumedOncePet_).map((pet) => String(pet.petName)));
+  const usedNames = new Set();
+
+  Object.keys(finalLineupsByChallenge).forEach((challengeId) => {
+    const selected = finalLineupsByChallenge[challengeId].filter(Boolean).map(String);
+    if (new Set(selected).size !== selected.length) throw apiError_("INVALID_LINEUP", "陣容包含重複角色", 400);
+    selected.forEach((name) => {
+      if (!owned.has(name)) throw apiError_("INVALID_LINEUP", "陣容包含未解鎖角色", 400);
+      if (consumed.has(name)) throw apiError_("PET_ALREADY_DEPLOYED", "整場限出戰一次的角色已經出戰過", 400);
+      if (usedNames.has(name)) throw apiError_("INVALID_LINEUP", "有角色已用於本回合其他關卡", 400);
+      usedNames.add(name);
+    });
+  });
+
+  const now = new Date().toISOString();
+  const newRows = [];
+  lineupUpdates.forEach((update) => {
+    const challengeId = String(update.challengeId);
+    const previous = lineupRows.filter((row) =>
+      String(row.teamId) === String(teamId)
+      && Number(row.round) === game.round
+      && String(row.challengeId) === challengeId
+    );
+    const currentVersion = Math.max(0, ...previous.map((row) => Number(row.version) || 0));
+    if (Number(update.version || 0) !== currentVersion) {
+      throw apiError_("VERSION_CONFLICT", "陣容已被其他分頁更新，請重新載入", 409);
+    }
+    const nextVersion = currentVersion + 1;
+    finalLineupsByChallenge[challengeId].forEach((name, slotIndex) => {
+      newRows.push([game.round, challengeId, String(teamId), slotIndex, name || "", nextVersion, now]);
+    });
+  });
+
+  appendRows_(SHEETS.lineups, newRows);
+  return { ok: true, updatedChallenges: lineupUpdates.length, updatedAt: now };
 }
 
 function getLineupSlots_(rows, challengeId, slotCount) {
