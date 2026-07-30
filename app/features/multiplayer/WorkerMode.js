@@ -9,7 +9,7 @@ import PetCompendiumLauncher from "../../components/PetCompendiumLauncher";
 import BattleSection from "../../components/BattleSection";
 import { calculateOfficialRound, getOfficialLineupVersions } from "./officialRound";
 import { estimateWorkerStrategies } from "./workerStrategyAdvisor";
-import { hydrateMultiplayerRoster, serializeLineup } from "./multiplayerAdapter";
+import { getDeployableMultiplayerRoster, hydrateMultiplayerRoster, serializeLineup } from "./multiplayerAdapter";
 import { getChallengeLabel, getMultiplayerRoundChallenges } from "../../lib/challengeConfig";
 import { ITEM_ICONS } from "../../lib/assetConfig";
 import { DRAW_CARDS, INITIAL_ROUND_POOL_NAMES, MAX_LEVEL_GAP, MAX_PET_LEVEL, MAX_ROUND } from "../../lib/gameConfig";
@@ -46,6 +46,14 @@ function createRosterLevelDraft(team, allPets) {
   return Object.fromEntries(allPets.map((pet) => [
     pet.name, Number(rosterByName.get(pet.name)?.level) || 0,
   ]));
+}
+
+function createRosterEnableDraft(team, allPets) {
+  const rosterByName = new Map((team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet]));
+  return Object.fromEntries(allPets.map((pet) => {
+    const row = rosterByName.get(pet.name);
+    return [pet.name, row ? row.enable !== false && (Number(row.level) || 0) > 0 : false];
+  }));
 }
 
 function buildUsedByChallenge(challenges, drafts) {
@@ -104,46 +112,57 @@ function lineupsMatch(a = [], b = []) {
   return a.every((value, index) => value === b[index]);
 }
 
-function levelRangeFromDraft(draftLevels) {
-  const unlockedLevels = Object.values(draftLevels).map((value) => Number(value) || 0).filter((value) => value > 0);
+function levelRangeFromDraft(draftLevels, allPets) {
+  const nonLegendaryNames = new Set(allPets.filter((pet) => Number(pet.tier) < 4).map((pet) => pet.name));
+  const unlockedLevels = Object.entries(draftLevels)
+    .filter(([name]) => nonLegendaryNames.has(name))
+    .map(([, value]) => Number(value) || 0)
+    .filter((value) => value > 0);
   if (!unlockedLevels.length) return 0;
   return Math.max(...unlockedLevels) - Math.min(...unlockedLevels);
 }
 
-function buildCollectionFromDraft(team, allPets, draftLevels) {
+function buildCollectionFromDraft(team, allPets, draftLevels, draftEnables = {}) {
   const rosterByName = new Map((team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet]));
   return allPets
     .map((pet) => {
       const level = Number(draftLevels[pet.name]) || 0;
       if (level <= 0) return null;
+      if (draftEnables[pet.name] === false) return null;
       const base = rosterByName.get(pet.name) ?? {};
       return {
         ...pet,
         level,
         gameRoundsDeployed: Number(base.gameRoundsDeployed) || 0,
         version: Number(base.version) || 0,
+        enable: draftEnables[pet.name] !== false,
       };
     })
     .filter(Boolean);
 }
 
-function summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamLineupDrafts) {
+function summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamEnableDrafts, teamLineupDrafts) {
   const initialLevels = createRosterLevelDraft(team, allPets);
   const draftLevels = teamLevelDrafts[String(team.teamId)] ?? initialLevels;
+  const initialEnables = createRosterEnableDraft(team, allPets);
+  const draftEnables = teamEnableDrafts[String(team.teamId)] ?? initialEnables;
   const initialLineups = createLineupDraft(team, challenges);
   const draftLineups = teamLineupDrafts[String(team.teamId)] ?? initialLineups;
   let increasedLevels = 0;
   let decreasedLevels = 0;
+  let changedEnableCount = 0;
   allPets.forEach((pet) => {
     const delta = (draftLevels[pet.name] ?? 0) - (initialLevels[pet.name] ?? 0);
     if (delta > 0) increasedLevels += delta;
     if (delta < 0) decreasedLevels += Math.abs(delta);
+    if (Boolean(draftEnables[pet.name]) !== Boolean(initialEnables[pet.name])) changedEnableCount += 1;
   });
   const changedChallenges = challenges.filter((challenge) => !lineupsMatch(draftLineups[challenge.id] ?? [], initialLineups[challenge.id] ?? []));
-  const levelRange = levelRangeFromDraft(draftLevels);
+  const levelRange = levelRangeFromDraft(draftLevels, allPets);
   return {
     increasedLevels,
     decreasedLevels,
+    changedEnableCount,
     hasLineupChanges: changedChallenges.length > 0,
     changedChallengeCount: changedChallenges.length,
     levelRange,
@@ -151,7 +170,7 @@ function summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamLine
   };
 }
 
-function WorkerLineupEditor({ team, challenges, busy, drafts, onUpdateSlot }) {
+function WorkerLineupEditor({ team, challenges, busy, drafts, enabledNames, onUpdateSlot }) {
   const usedByChallenge = useMemo(() => Object.fromEntries(challenges.map((challenge) => [
     challenge.id,
     new Set(challenges
@@ -184,8 +203,9 @@ function WorkerLineupEditor({ team, challenges, busy, drafts, onUpdateSlot }) {
                     <option value="">空格</option>
                     {team.roster.map((pet) => {
                       const usedOnce = ONCE_PER_GAME_PET_NAMES.includes(String(pet.petName)) && Number(pet.gameRoundsDeployed) > 0;
-                      const unavailable = usedOnce || (usedByChallenge[challenge.id].has(String(pet.petName)) && petName !== String(pet.petName));
-                      return <option key={pet.petName} value={pet.petName} disabled={unavailable}>{pet.petName} Lv.{pet.level}{usedOnce ? "（已出戰）" : unavailable ? "（已用於其他關卡）" : ""}</option>;
+                      const disabledByRoster = !enabledNames.has(String(pet.petName));
+                      const unavailable = usedOnce || disabledByRoster || (usedByChallenge[challenge.id].has(String(pet.petName)) && petName !== String(pet.petName));
+                      return <option key={pet.petName} value={pet.petName} disabled={unavailable}>{pet.petName} Lv.{pet.level}{usedOnce ? "（已出戰）" : disabledByRoster ? "（已停用）" : unavailable ? "（已用於其他關卡）" : ""}</option>;
                     })}
                   </select>
                 </label>
@@ -200,7 +220,7 @@ function WorkerLineupEditor({ team, challenges, busy, drafts, onUpdateSlot }) {
   );
 }
 
-function WorkerRosterEditor({ team, allPets, busy, draftLevels, onSetLevel }) {
+function WorkerRosterEditor({ team, allPets, busy, draftLevels, draftEnables, onSetLevel, onSetEnable }) {
   const initialLevels = useMemo(() => createRosterLevelDraft(team, allPets), [allPets, team]);
 
   return (
@@ -220,6 +240,15 @@ function WorkerRosterEditor({ team, allPets, busy, draftLevels, onSetLevel }) {
                 <span>{level > 0 ? `Lv.${level}` : "未解鎖"}</span>
                 <button type="button" aria-label={`${pet.name}升一級`} onClick={() => onSetLevel(team.teamId, pet.name, level + 1)} disabled={busy || level >= MAX_PET_LEVEL}>＋</button>
               </div>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={Boolean(draftEnables[pet.name])}
+                  onChange={(event) => onSetEnable(team.teamId, pet.name, event.target.checked)}
+                  disabled={busy || level <= 0}
+                />
+                可上場
+              </label>
               <small className={`worker-roster-pet__delta${delta > 0 ? " is-increase" : delta < 0 ? " is-decrease" : ""}`}>
                 {delta > 0 ? `增加 ${delta} 級` : delta < 0 ? `減少 ${Math.abs(delta)} 級` : "等級未變更"}
               </small>
@@ -361,6 +390,7 @@ export default function WorkerMode({ onBack }) {
   const [battleReplays, setBattleReplays] = useState([]);
   const [bossLevel, setBossLevel] = useState(1);
   const [teamLevelDrafts, setTeamLevelDrafts] = useState({});
+  const [teamEnableDrafts, setTeamEnableDrafts] = useState({});
   const [teamLineupDrafts, setTeamLineupDrafts] = useState({});
   const [strategyBusy, setStrategyBusy] = useState(false);
   const [strategyProgress, setStrategyProgress] = useState(null);
@@ -379,6 +409,9 @@ export default function WorkerMode({ onBack }) {
   const selectedTeamLevelDraft = useMemo(() => (
     selectedTeam ? (teamLevelDrafts[String(selectedTeam.teamId)] ?? createRosterLevelDraft(selectedTeam, allPets)) : null
   ), [allPets, selectedTeam, teamLevelDrafts]);
+  const selectedTeamEnableDraft = useMemo(() => (
+    selectedTeam ? (teamEnableDrafts[String(selectedTeam.teamId)] ?? createRosterEnableDraft(selectedTeam, allPets)) : null
+  ), [allPets, selectedTeam, teamEnableDrafts]);
   const selectedTeamLineupDraft = useMemo(() => (
     selectedTeam ? (teamLineupDrafts[String(selectedTeam.teamId)] ?? createLineupDraft(selectedTeam, challenges)) : null
   ), [challenges, selectedTeam, teamLineupDrafts]);
@@ -400,14 +433,23 @@ export default function WorkerMode({ onBack }) {
       return total + challenges.filter((challenge) => JSON.stringify(draft[challenge.id] ?? []) !== JSON.stringify(initial[challenge.id] ?? [])).length;
     }, 0);
   }, [challenges, game, teamLineupDrafts]);
+  const pendingEnableChanges = useMemo(() => {
+    if (!game) return 0;
+    return game.teams.reduce((total, team) => {
+      const draft = teamEnableDrafts[String(team.teamId)];
+      if (!draft) return total;
+      const initial = createRosterEnableDraft(team, allPets);
+      return total + allPets.filter((pet) => Boolean(draft[pet.name]) !== Boolean(initial[pet.name])).length;
+    }, 0);
+  }, [allPets, game, teamEnableDrafts]);
   const teamDraftSummaries = useMemo(() => {
     if (!game) return {};
     return Object.fromEntries(game.teams.map((team) => [
       String(team.teamId),
-      summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamLineupDrafts),
+      summarizeTeamDraft(team, allPets, challenges, teamLevelDrafts, teamEnableDrafts, teamLineupDrafts),
     ]));
-  }, [allPets, challenges, game, teamLevelDrafts, teamLineupDrafts]);
-  const hasPendingChanges = pendingLevelChanges > 0 || pendingLineupChanges > 0;
+  }, [allPets, challenges, game, teamEnableDrafts, teamLevelDrafts, teamLineupDrafts]);
+  const hasPendingChanges = pendingLevelChanges > 0 || pendingEnableChanges > 0 || pendingLineupChanges > 0;
 
   useEffect(() => {
     if (!status) return undefined;
@@ -419,6 +461,7 @@ export default function WorkerMode({ onBack }) {
     const nextGame = await api.loadWorkerGame();
     setGame(nextGame);
     setTeamLevelDrafts({});
+    setTeamEnableDrafts({});
     setTeamLineupDrafts({});
     setStrategyResults([]);
     setStrategyProgress(null);
@@ -475,13 +518,42 @@ export default function WorkerMode({ onBack }) {
     const normalizedTeamId = String(teamId);
     const team = (game?.teams ?? []).find((item) => String(item.teamId) === normalizedTeamId);
     if (!team) return;
+    const nextLevel = Math.max(0, Math.min(MAX_PET_LEVEL, Math.floor(Number(level) || 0)));
     setTeamLevelDrafts((current) => {
       const base = current[normalizedTeamId] ?? createRosterLevelDraft(team, allPets);
       return {
         ...current,
         [normalizedTeamId]: {
           ...base,
-          [petName]: Math.max(0, Math.min(MAX_PET_LEVEL, Math.floor(Number(level) || 0))),
+          [petName]: nextLevel,
+        },
+      };
+    });
+    if (nextLevel <= 0) {
+      setTeamEnableDrafts((current) => {
+        const base = current[normalizedTeamId] ?? createRosterEnableDraft(team, allPets);
+        return {
+          ...current,
+          [normalizedTeamId]: {
+            ...base,
+            [petName]: false,
+          },
+        };
+      });
+    }
+  }
+
+  function updateTeamEnableDraft(teamId, petName, enabled) {
+    const normalizedTeamId = String(teamId);
+    const team = (game?.teams ?? []).find((item) => String(item.teamId) === normalizedTeamId);
+    if (!team) return;
+    setTeamEnableDrafts((current) => {
+      const base = current[normalizedTeamId] ?? createRosterEnableDraft(team, allPets);
+      return {
+        ...current,
+        [normalizedTeamId]: {
+          ...base,
+          [petName]: Boolean(enabled),
         },
       };
     });
@@ -555,7 +627,8 @@ export default function WorkerMode({ onBack }) {
     setError(null);
     setStatus(null);
     const baseDraft = teamLevelDrafts[normalizedTeamId] ?? createRosterLevelDraft(team, allPets);
-    const collection = buildCollectionFromDraft(team, allPets, baseDraft);
+    const baseEnableDraft = teamEnableDrafts[normalizedTeamId] ?? createRosterEnableDraft(team, allPets);
+    const collection = buildCollectionFromDraft(team, allPets, baseDraft, baseEnableDraft);
     const draws = drawPetCards(game.round, drawCount, Number(teamId), Number(game.version) || 0)
       .filter((pet) => pet.tier < 4 && canDrawPetAtRound(pet, game.round));
     const nextCollection = applyDrawsToCollection(collection, draws);
@@ -567,6 +640,16 @@ export default function WorkerMode({ onBack }) {
       ...current,
       [normalizedTeamId]: nextDraft,
     }));
+    setTeamEnableDrafts((current) => {
+      const base = current[normalizedTeamId] ?? createRosterEnableDraft(team, allPets);
+      return {
+        ...current,
+        [normalizedTeamId]: Object.fromEntries(allPets.map((pet) => [
+          pet.name,
+          nextCollection.some((entry) => entry.name === pet.name) ? true : Boolean(base[pet.name] && nextDraft[pet.name] > 0),
+        ])),
+      };
+    });
     setStatus(`已在前端草稿替第 ${teamId} 小隊模擬抽 ${drawCount} 張卡片；尚未儲存到 Google Sheet`);
   }
 
@@ -601,16 +684,26 @@ export default function WorkerMode({ onBack }) {
       const teams = game.teams.map((team) => {
         const teamId = String(team.teamId);
         const rosterDraft = teamLevelDrafts[teamId];
+        const enableDraft = teamEnableDrafts[teamId];
         const lineupDraft = teamLineupDrafts[teamId];
         const rosterByName = new Map((team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet]));
         const initialLevels = createRosterLevelDraft(team, allPets);
+        const initialEnables = createRosterEnableDraft(team, allPets);
         const initialLineups = createLineupDraft(team, challenges);
-        const rosterUpdates = rosterDraft
+        const rosterUpdates = (rosterDraft || enableDraft)
           ? allPets
-            .filter((pet) => rosterDraft[pet.name] !== initialLevels[pet.name])
+            .filter((pet) =>
+              (rosterDraft ? rosterDraft[pet.name] : initialLevels[pet.name]) !== initialLevels[pet.name]
+              || Boolean(enableDraft ? enableDraft[pet.name] : initialEnables[pet.name]) !== Boolean(initialEnables[pet.name])
+            )
             .map((pet) => {
               const rosterPet = rosterByName.get(pet.name);
-              return { petName: pet.name, level: rosterDraft[pet.name], version: Number(rosterPet?.version) || 0 };
+              return {
+                petName: pet.name,
+                level: rosterDraft ? rosterDraft[pet.name] : initialLevels[pet.name],
+                enable: enableDraft ? Boolean(enableDraft[pet.name]) : Boolean(initialEnables[pet.name]),
+                version: Number(rosterPet?.version) || 0,
+              };
             })
           : [];
         const lineupUpdates = lineupDraft
@@ -647,10 +740,11 @@ export default function WorkerMode({ onBack }) {
       }));
       const lineups = roundGame.teams.flatMap((team) => {
         const configured = configureTeamsFromCollection(hydrateMultiplayerRoster(team.roster), roundChallenges);
+        const deployableRoster = getDeployableMultiplayerRoster(hydrateMultiplayerRoster(team.roster));
         return roundChallenges.map((challenge, index) => ({
           teamId: team.teamId,
           challengeId: challenge.id,
-          lineup: serializeLineup(configured[index], challenge.teamSize),
+          lineup: serializeLineup(configureTeamsFromCollection(deployableRoster, roundChallenges)[index], challenge.teamSize),
         }));
       });
       const result = await api.autoConfigureAllLineups({ round: roundGame.round, lineups });
@@ -707,6 +801,7 @@ export default function WorkerMode({ onBack }) {
     try {
       const results = await estimateWorkerStrategies(game, {
         teamLevelDrafts,
+        teamEnableDrafts,
         teamLineupDrafts,
         allPets,
         onProgress: setStrategyProgress,
@@ -798,6 +893,7 @@ export default function WorkerMode({ onBack }) {
             const draftSummary = teamDraftSummaries[String(team.teamId)] ?? {
               increasedLevels: 0,
               decreasedLevels: 0,
+              changedEnableCount: 0,
               hasLineupChanges: false,
               changedChallengeCount: 0,
               levelRange: 0,
@@ -813,6 +909,11 @@ export default function WorkerMode({ onBack }) {
                   {draftSummary.increasedLevels || draftSummary.decreasedLevels ? (
                     <small className="is-dirty">
                       等級 {draftSummary.increasedLevels ? `+${draftSummary.increasedLevels}` : "+0"} / {draftSummary.decreasedLevels ? `-${draftSummary.decreasedLevels}` : "-0"}
+                    </small>
+                  ) : null}
+                  {draftSummary.changedEnableCount ? (
+                    <small className="is-dirty">
+                      可上場設定已改 {draftSummary.changedEnableCount} 張
                     </small>
                   ) : null}
                   {draftSummary.hasLineupChanges ? (
@@ -832,7 +933,7 @@ export default function WorkerMode({ onBack }) {
           })}</div></section>
           <section className="mode-panel">
             <h2>統一儲存</h2>
-            <p>目前暫存 {pendingLevelChanges} 項等級變更、{pendingLineupChanges} 個關卡陣容。編輯小隊時不會立即送出；按下這裡才會寫回 Google Sheet。</p>
+            <p>目前暫存 {pendingLevelChanges} 項等級變更、{pendingEnableChanges} 項可上場設定、{pendingLineupChanges} 個關卡陣容。編輯小隊時不會立即送出；按下這裡才會寫回 Google Sheet。</p>
             <button type="button" className={`worker-lineup-save${busyAction === "save-all" ? " is-pending" : ""}`} onClick={saveAllChanges} disabled={busy || !hasPendingChanges}>
               {busyAction === "save-all" ? "儲存中…" : hasPendingChanges ? "儲存所有暫存變更" : "目前沒有待儲存變更"}
             </button>
@@ -867,12 +968,12 @@ export default function WorkerMode({ onBack }) {
                     套用到草稿
                   </button>
                 </div>
-                <WorkerRosterEditor team={selectedTeam} allPets={allPets} busy={busy} draftLevels={selectedTeamLevelDraft} onSetLevel={updateTeamLevelDraft} />
+                <WorkerRosterEditor team={selectedTeam} allPets={allPets} busy={busy} draftLevels={selectedTeamLevelDraft} draftEnables={selectedTeamEnableDraft} onSetLevel={updateTeamLevelDraft} onSetEnable={updateTeamEnableDraft} />
               </section>
               <section className="worker-team-detail__section">
                 <h3>設定出戰隊伍</h3>
                 <p>陣容變更會先暫存；請回主畫面底部按一次儲存。</p>
-                <WorkerLineupEditor team={selectedTeam} challenges={challenges} busy={busy} drafts={selectedTeamLineupDraft} onUpdateSlot={updateTeamLineupDraft} />
+                <WorkerLineupEditor team={selectedTeam} challenges={challenges} busy={busy} drafts={selectedTeamLineupDraft} enabledNames={new Set(allPets.filter((pet) => selectedTeamEnableDraft?.[pet.name] && (selectedTeamLevelDraft?.[pet.name] ?? 0) > 0).map((pet) => pet.name))} onUpdateSlot={updateTeamLineupDraft} />
               </section>
             </div>
           </section> : <section className="worker-team-dialog" role="dialog" aria-modal="true" aria-labelledby="worker-team-dialog-title"><p className="mode-loading">找不到隊伍資料，請重新整理</p></section>}

@@ -116,14 +116,15 @@ describe("多人模式基礎規則", () => {
   it("只靠後端角色名稱與等級建立共用戰鬥角色", () => {
     const roster = hydrateMultiplayerRoster([
       { teamId: "a", name: "貓", level: 2, version: 3 },
-      { teamId: "a", name: "狗", level: 1, version: 3 },
+      { teamId: "a", name: "狗", level: 1, version: 3, enable: false },
     ]);
     const lineup = hydrateSavedLineup(["狗", null, "貓"], roster, 5);
 
-    expect(roster[0]).toMatchObject({ name: "貓", level: 2, version: 3, rosterId: "a:貓" });
+    expect(roster[0]).toMatchObject({ name: "貓", level: 2, version: 3, rosterId: "a:貓", enable: true });
+    expect(roster[1]).toMatchObject({ name: "狗", enable: false });
     expect(roster[0].atk).toBeGreaterThan(35);
-    expect(lineup.map((pet) => pet?.name ?? null)).toEqual(["狗", null, "貓", null, null]);
-    expect(serializeLineup(lineup, 5)).toEqual(["狗", null, "貓", null, null]);
+    expect(lineup.map((pet) => pet?.name ?? null)).toEqual([null, null, "貓", null, null]);
+    expect(serializeLineup(lineup, 5)).toEqual([null, null, "貓", null, null]);
   });
 
   it("工人結算接受缺席空格，雙人關分數同時計入兩隊", () => {

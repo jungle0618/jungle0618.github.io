@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | `GameState` | `round`, `phase`, `version`, `updatedAt` | 目前正式回合與寫入版本 |
 | `Teams` | `teamId`, `teamName`, `passwordHash`, `score`, `rank` | 十二隊登入與排名 |
-| `Roster` | `teamId`, `petName`, `level`, `gameRoundsDeployed`, `version` | 各隊角色等級及持久狀態 |
+| `Roster` | `teamId`, `petName`, `level`, `enable`, `gameRoundsDeployed`, `version` | 各隊角色等級、是否可上場及持久狀態 |
 | `Lineups` | `round`, `challengeId`, `teamId`, `slotIndex`, `petName`, `version` | 玩家最後儲存的陣容；`petName` 可空白 |
 | `Pairings` | `round`, `challengeId`, `pairId`, `higherRankTeamId`, `lowerRankTeamId`, `createdAt` | 回合開始時固定的雙人關配對快照 |
 | `Battles` | `battleId`, `round`, `challengeId`, `teamIds`, `score`, `result`, `replayJson` | 工人端正式結算與完整回放 |
@@ -38,7 +38,7 @@
 
 - 玩家可儲存含空格的陣容，API 只檢查登入身分、角色所有權、格數與資料版本。
 - 工人每次自動抽卡會讓每隊各抽 `GAME_CONFIG.drawCards` 張非傳奇角色；角色可在 `characterConfig` 以 `drawFromRound` 設定最早可抽回合，單人與多人共用此限制。新角色以 Lv.1 解鎖，重複角色升級，最高與最低等級差最多為 4。陣容不自動產生，由工人後台或玩家手動儲存。
-- 工人點入單一小隊後可查看所有我方角色；Lv.0 表示未解鎖，使用 `＋`／`－` 在 Lv.0～Lv.10 間調整，按下確認才批次送出。0→1 會新增至 `Roster`，1→0 會從 `Roster` 移除；仍在本回合陣容中的角色不能鎖回 Lv.0。
+- 工人點入單一小隊後可查看所有我方角色；Lv.0 表示未解鎖，使用 `＋`／`－` 在 Lv.0～Lv.10 間調整，按下確認才批次送出。`enable=false` 代表仍保留等級、會計入等級統計，但不能派上場；仍在本回合陣容中的角色不能鎖回 Lv.0 或停用。
 - 工人「所有隊伍一鍵組隊」會依角色等級與能力替每隊配置本回合全部關卡；同隊角色不跨關卡重複，雙人關只寫入該隊自己的 3 格，所有結果以一次批次請求寫入。
 - 同一角色在同一回合只能用於一個關卡，同一陣容內也不能重複。
 - 多人模式的一鍵組隊與隨機組隊只使用自己的角色池；雙人關搭檔陣容僅供查看，不會被加入本隊三格。

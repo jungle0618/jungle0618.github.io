@@ -30,6 +30,14 @@ function createRosterLevelDraft(team, allPets) {
   ]));
 }
 
+function createRosterEnableDraft(team, allPets) {
+  const rosterByName = new Map(safeArray(team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet]));
+  return Object.fromEntries(allPets.map((pet) => {
+    const row = rosterByName.get(pet.name);
+    return [pet.name, row ? row.enable !== false && (Number(row.level) || 0) > 0 : false];
+  }));
+}
+
 function getSavedLineup(team, challenge, slotCount) {
   const rows = safeArray(team.currentLineups)
     .filter((row) => String(row.challengeId) === String(challenge.id))
@@ -48,12 +56,13 @@ function isSingleUseName(name) {
   return ONCE_PER_GAME_PET_NAMES.includes(String(name));
 }
 
-function buildRoster(team, allPets, levelDraft, { includeSingleUse = false } = {}) {
+function buildRoster(team, allPets, levelDraft, enableDraft, { includeSingleUse = false } = {}) {
   const rosterByName = new Map(safeArray(team.rosterMeta ?? team.roster).map((pet) => [String(pet.petName), pet]));
   return allPets
     .map((pet) => {
       const level = Number(levelDraft[pet.name]) || 0;
       if (level <= 0) return null;
+      if (enableDraft?.[pet.name] === false) return null;
       if (!includeSingleUse && isSingleUseName(pet.name)) return null;
       const base = rosterByName.get(pet.name) ?? {};
       return buildNewPet({
@@ -322,7 +331,7 @@ function evaluateGenome(genome, context) {
   return evaluation;
 }
 
-function buildDuoContext(team, game, challenges, teamLineupDrafts, teamLevelDrafts, allPets) {
+function buildDuoContext(team, game, challenges, teamLineupDrafts, teamLevelDrafts, teamEnableDrafts, allPets) {
   const teamsById = new Map(safeArray(game.teams).map((entry) => [String(entry.teamId), entry]));
   const pairings = buildPartnerMap(game, challenges);
   return Object.fromEntries(challenges.map((challenge) => {
@@ -334,7 +343,8 @@ function buildDuoContext(team, game, challenges, teamLineupDrafts, teamLevelDraf
     const partner = teamsById.get(String(partnerId));
     if (!partner) return [challenge.id, null];
     const partnerLevels = teamLevelDrafts[String(partner.teamId)] ?? createRosterLevelDraft(partner, allPets);
-    const partnerRoster = buildRoster(partner, allPets, partnerLevels, { includeSingleUse: true });
+    const partnerEnables = teamEnableDrafts[String(partner.teamId)] ?? createRosterEnableDraft(partner, allPets);
+    const partnerRoster = buildRoster(partner, allPets, partnerLevels, partnerEnables, { includeSingleUse: true });
     const partnerRosterMap = new Map(partnerRoster.map((pet) => [pet.name, pet]));
     const partnerDraft = teamLineupDrafts[String(partner.teamId)] ?? createLineupDraft(partner, challenges);
     const partnerActual = buildActualLineupDraft(partner, [challenge], partnerDraft, partnerRosterMap);
@@ -403,14 +413,15 @@ function improveGenomeLocally(evaluation, context, sortedNames) {
 
 async function estimateTeamStrategy(team, game, challenges, options) {
   const levelDraft = options.teamLevelDrafts[String(team.teamId)] ?? createRosterLevelDraft(team, options.allPets);
-  const actualRoster = sortRosterByStrength(buildRoster(team, options.allPets, levelDraft, { includeSingleUse: true }));
-  const optimizerRoster = sortRosterByStrength(buildRoster(team, options.allPets, levelDraft, { includeSingleUse: false }));
+  const enableDraft = options.teamEnableDrafts[String(team.teamId)] ?? createRosterEnableDraft(team, options.allPets);
+  const actualRoster = sortRosterByStrength(buildRoster(team, options.allPets, levelDraft, enableDraft, { includeSingleUse: true }));
+  const optimizerRoster = sortRosterByStrength(buildRoster(team, options.allPets, levelDraft, enableDraft, { includeSingleUse: false }));
   const actualRosterMap = new Map(actualRoster.map((pet) => [pet.name, pet]));
   const rosterMap = new Map(optimizerRoster.map((pet) => [pet.name, pet]));
   const sortedNames = optimizerRoster.map((pet) => pet.name);
   const actualDraft = options.teamLineupDrafts[String(team.teamId)] ?? createLineupDraft(team, challenges);
   const actualLineups = buildActualLineupDraft(team, challenges, actualDraft, actualRosterMap);
-  const duoContext = buildDuoContext(team, game, challenges, options.teamLineupDrafts, options.teamLevelDrafts, options.allPets);
+  const duoContext = buildDuoContext(team, game, challenges, options.teamLineupDrafts, options.teamLevelDrafts, options.teamEnableDrafts, options.allPets);
   const getEnemy = createEnemyCache(challenges);
   const actualContext = {
     challenges,
@@ -466,12 +477,12 @@ async function estimateTeamStrategy(team, game, challenges, options) {
   };
 }
 
-export async function estimateWorkerStrategies(game, { teamLevelDrafts = {}, teamLineupDrafts = {}, allPets = [], onProgress } = {}) {
+export async function estimateWorkerStrategies(game, { teamLevelDrafts = {}, teamEnableDrafts = {}, teamLineupDrafts = {}, allPets = [], onProgress } = {}) {
   const currentChallenges = safeArray(game?.currentRoundChallenges?.length ? game.currentRoundChallenges : getMultiplayerRoundChallenges(game?.round));
   const results = [];
   for (let index = 0; index < safeArray(game?.teams).length; index += 1) {
     const team = game.teams[index];
-    const result = await estimateTeamStrategy(team, game, currentChallenges, { teamLevelDrafts, teamLineupDrafts, allPets });
+    const result = await estimateTeamStrategy(team, game, currentChallenges, { teamLevelDrafts, teamEnableDrafts, teamLineupDrafts, allPets });
     results.push(result);
     onProgress?.({ completed: index + 1, total: game.teams.length, teamId: String(team.teamId) });
     await pauseFrame();

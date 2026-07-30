@@ -857,9 +857,9 @@ describe("Solo", () => {
   it("敵方角色各自使用唯一名稱與敵方圖片", () => {
     const enemies = Object.values(ENEMY_DEFINITIONS);
     const formalEnemyIds = new Set(SOLO_ENCOUNTERS.flatMap((encounter) => encounter.enemyIds ?? []));
-    expect(enemies).toHaveLength(36);
-    expect(new Set(enemies.map((enemy) => enemy.name)).size).toBe(36);
-    expect(new Set(enemies.map((enemy) => enemy.image)).size).toBe(36);
+    expect(enemies).toHaveLength(37);
+    expect(new Set(enemies.map((enemy) => enemy.name)).size).toBe(37);
+    expect(new Set(enemies.map((enemy) => enemy.image)).size).toBe(37);
     expect(enemies.every((enemy) => enemy.image.startsWith("/pet_images/enemies/"))).toBe(true);
     expect(getPetCompendiumList().every((pet) => pet.image.startsWith("/pet_images/allies/"))).toBe(true);
     expect([...formalEnemyIds].every((id) => id in ENEMY_DEFINITIONS)).toBe(true);

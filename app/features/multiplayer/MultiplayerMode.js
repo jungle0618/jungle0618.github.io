@@ -15,7 +15,13 @@ import { compactTeamToRight, configureTeamsFromCollection } from "../../lib/line
 import { buildDuoLineup, createMultiplayerBattleEnvironment, hasHiddenSingleTestAchievement, isHigherRankTeamInPairing } from "../../lib/multiplayerLogic";
 import { formatDisplayName } from "../../lib/petCatalog";
 import { buildLevelSeriesScore, calculateLevelScore } from "../../lib/battleScoring";
-import { hydrateMultiplayerRoster, hydrateSavedLineup, multiplayerTeamName, serializeLineup } from "./multiplayerAdapter";
+import {
+  getDeployableMultiplayerRoster,
+  hydrateMultiplayerRoster,
+  hydrateSavedLineup,
+  multiplayerTeamName,
+  serializeLineup,
+} from "./multiplayerAdapter";
 import { createMultiplayerApi } from "./multiplayerApi";
 import ModeLogin from "./ModeLogin";
 import MultiplayerBusyOverlay from "./MultiplayerBusyOverlay";
@@ -138,7 +144,10 @@ export default function MultiplayerMode({ onBack }) {
   const activeTeams = teamEditMode === "pair" ? pairingTeams : teams;
   const setActiveTeams = teamEditMode === "pair" ? setPairingTeams : setTeams;
   const collectionTeams = useMemo(() => editableTeamIndexes.map((index) => activeTeams[index] ?? []), [activeTeams, editableTeamIndexes]);
-  const activeCollection = teamEditMode === "pair" ? partnerRoster : roster;
+  const activeCollection = useMemo(
+    () => teamEditMode === "pair" ? getDeployableMultiplayerRoster(partnerRoster) : getDeployableMultiplayerRoster(roster),
+    [partnerRoster, roster, teamEditMode]
+  );
   const cardProps = useMemo(() => ({ formatDisplayName, itemIcons: ITEM_ICONS, StatIcon, showPersistentProgress: true }), []);
   const activeSpecialEffects = useMemo(() => activeSpecialEffectLabels(game, ownTeam), [game, ownTeam]);
 
@@ -201,7 +210,7 @@ export default function MultiplayerMode({ onBack }) {
 
   function autoConfigureTeams(random = null) {
     clearDragging();
-    const configured = configureTeamsFromCollection(roster, challenges, random);
+    const configured = configureTeamsFromCollection(getDeployableMultiplayerRoster(roster), challenges, random);
     setTeams(configured);
     setStatus(random ? "已從自己的角色池隨機組隊" : "已從自己的角色池依等級一鍵組隊");
   }

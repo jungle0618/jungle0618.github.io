@@ -21,13 +21,22 @@ export function hydrateMultiplayerRoster(rows = []) {
         teamId: row.teamId != null ? String(row.teamId) : undefined,
         rosterId: row.rosterId ?? `${row.teamId ?? "team"}:${name}`,
         version: row.version,
+        enable: row.enable !== false,
       };
     });
 }
 
+export function isMultiplayerRosterEnabled(pet) {
+  return pet?.enable !== false && (Number(pet?.level) || 0) > 0;
+}
+
+export function getDeployableMultiplayerRoster(roster = []) {
+  return roster.filter(isMultiplayerRosterEnabled);
+}
+
 /** 將 Sheet 儲存的角色名稱格子轉成共用 GameShell 可使用的角色物件。 */
 export function hydrateSavedLineup(savedSlots = [], roster = [], size = savedSlots.length) {
-  const byName = new Map(roster.map((pet) => [pet.name, pet]));
+  const byName = new Map(getDeployableMultiplayerRoster(roster).map((pet) => [pet.name, pet]));
   const lineup = Array.from({ length: size }, (_, index) => {
     const slot = savedSlots[index];
     const name = typeof slot === "string" ? slot : slot?.name;

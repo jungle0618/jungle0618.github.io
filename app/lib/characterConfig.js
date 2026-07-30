@@ -114,9 +114,10 @@ export const ENEMY_DEFINITIONS = {
   endless_colossus: { name: "水豚", image: "/pet_images/enemies/capybara.png", atk: 5, hp: 5, special: { roundLowestEnemyDamage: 5 } },
   tutorial_guard: { name: "斑馬", image: "/pet_images/enemies/zebra.png", atk: 20, hp: 200 },
 
-  // 正式關自訂角色改用正式關未出場的既有敵方動物與圖片；母雞／雞蛋保留在關卡內定義。
+  // 正式關與工人測試關的自訂敵人統一收斂到共用敵方設定。
   worker_living_enemy_power: { name: "奶龍", image: "/pet_images/enemies/milk_dragon.png", atk: 6, hp: 30, livingEnemyAtkBase: 0, special: { livingEnemyAtkPerUnit: 6, livingEnemyHpPerUnit: 30 } },
   worker_living_enemy_guard: { name: "小蜜蜂", image: "/pet_images/enemies/little_bee.png", atk: 5, hp: 40, special: {} },
+  worker_summoning_hen: { name: "母雞", image: "/pet_images/enemies/hen.png", atk: 12, hp: 40, special: { roundFrontSummonEvery: 2, roundFrontSummonName: "雞蛋", roundFrontSummonImage: "/pet_images/enemies/egg.png", roundFrontSummonAtk: 4, roundFrontSummonHp: 3, roundFrontSummonDeathSourceAtk: 3 } },
   worker_survival_splitter: { name: "芒果", image: "/pet_images/enemies/mango.png", atk: 20, hp: 20, special: { deathSplitMaxGenerations: 3 } },
 };
 
@@ -153,7 +154,7 @@ export const FORMAL_ENEMY_ENCOUNTERS = [
   { name: "霧沼三震", description: "開戰三段全體傷害後進入奇數回合閃避節奏。", enemyIds: ["shadow_assassin"] },
   { name: "存活威壓", description: "猴子與水獺依序排列；猴子攻擊力與生命上限為 6 × 我方目前存活角色數，水獺為 5/40 白板。", enemyIds: ["worker_living_enemy_power", "worker_living_enemy_guard"] },
   { name: "爆羽鬥獸", description: "中央爆破會餵養兩側鬣狗，擊殺順序會改變戰局。", enemyIds: ["sweep_brute", "bombard_martyr", "sweep_brute"] },
-  { name: "孵蛋母雞", description: "母雞持續在前方孵化雞蛋，考驗清場速度與前線壓力控制。", enemies: [{ id: "worker_summoning_hen", name: "母雞", image: "/pet_images/enemies/hen.png", atk: 12, hp: 40, special: { roundFrontSummonEvery: 2, roundFrontSummonName: "雞蛋", roundFrontSummonImage: "/pet_images/enemies/egg.png", roundFrontSummonAtk: 4, roundFrontSummonHp: 3, roundFrontSummonDeathSourceAtk: 3 } }] },
+  { name: "孵蛋母雞", description: "母雞持續在前方孵化雞蛋，考驗清場速度與前線壓力控制。", enemyIds: ["worker_summoning_hen"] },
   { name: "死亡分裂", description: "羚羊死亡時分裂成兩個較弱個體，考驗範圍傷害與持續作戰。", enemyIds: ["worker_survival_splitter"] },
   { name: "駝羽風暴", description: "開場轟炸、死亡爆破與範圍普攻形成三種不同傷害波段。", enemyIds: ["storm_archer", "bombard_opener", "bombard_martyr"] },
 ];

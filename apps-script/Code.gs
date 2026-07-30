@@ -1,4 +1,4 @@
-const API_VERSION = "2026-07-28-battle-flags-table-v1";
+const API_VERSION = "2026-07-30-roster-enable-v1";
 const SHEETS = Object.freeze({
   gameState: "GameState", teams: "Teams", roster: "Roster", lineups: "Lineups",
   pairings: "Pairings", battles: "Battles", workerAuth: "WorkerAuth",
@@ -7,7 +7,7 @@ const SHEETS = Object.freeze({
 const SHEET_HEADERS = Object.freeze({
   GameState: ["round", "phase", "version", "updatedAt"],
   Teams: ["teamId", "teamName", "passwordHash", "score", "rank", "version", "enabled"],
-  Roster: ["teamId", "petName", "level", "gameRoundsDeployed", "version"],
+  Roster: ["teamId", "petName", "level", "enable", "gameRoundsDeployed", "version"],
   Lineups: ["round", "challengeId", "teamId", "slotIndex", "petName", "version", "updatedAt"],
   Pairings: ["round", "challengeId", "pairId", "higherRankTeamId", "lowerRankTeamId", "createdAt"],
   Battles: ["battleId", "round", "challengeId", "teamIds", "score", "result", "replayJson", "createdAt"],
@@ -217,6 +217,23 @@ function truthySheetValue_(value) {
   return ["true", "1", "yes", "y", "on"].indexOf(text) >= 0;
 }
 
+function rosterEnabled_(pet) {
+  if (!pet) return true;
+  if (pet.enable === false) return false;
+  const text = String(pet.enable || "").trim().toLowerCase();
+  if (!text) return true;
+  if (["false", "0", "no", "n", "off"].indexOf(text) >= 0) return false;
+  return true;
+}
+
+function rosterUnlocked_(pet) {
+  return (Number(pet && pet.level) || 0) > 0;
+}
+
+function rosterDeployable_(pet) {
+  return rosterUnlocked_(pet) && rosterEnabled_(pet);
+}
+
 function multiplayerTeamFlags_(team) {
   const turtleRaw = team && team.turtle_net;
   const waterRaw = team && team.water_park;
@@ -380,6 +397,7 @@ function loadRawGameState_(options = {}) {
     delete copy._rowNumber;
     return copy;
   });
+  const normalizedRoster = roster.map((pet) => Object.assign({}, pet, { enable: rosterEnabled_(pet) }));
   return {
     round,
     phase: state.phase || "prepare",
@@ -393,7 +411,7 @@ function loadRawGameState_(options = {}) {
       isRaining: truthySheetValue_(battleFlags.gameState.is_raining),
     },
     teams: teams.map((team) => {
-      const teamRoster = roster.filter((pet) => String(pet.teamId) === String(team.teamId));
+      const teamRoster = normalizedRoster.filter((pet) => String(pet.teamId) === String(team.teamId));
       const teamFlags = battleFlags.teamById[String(team.teamId)] || { turtle_net: "", water_park: "" };
       return {
       teamId: String(team.teamId), teamName: team.teamName, score: Number(team.score) || 0,
@@ -401,10 +419,10 @@ function loadRawGameState_(options = {}) {
       enabled: team.enabled !== false,
       ...multiplayerTeamFlags_(teamFlags),
       ...(includeRosters ? {
-        roster: teamRoster.filter((pet) => (Number(pet.level) || 0) > 0),
+        roster: teamRoster.filter((pet) => rosterUnlocked_(pet)).map((pet) => Object.assign({}, pet, { enable: rosterEnabled_(pet) })),
         rosterMeta: teamRoster,
       } : {
-        rosterCount: teamRoster.filter((pet) => (Number(pet.level) || 0) > 0).length,
+        rosterCount: teamRoster.filter((pet) => rosterUnlocked_(pet)).length,
       }),
       ...(includeRosters ? {
         currentLineups: latestLineups_(lineups.filter((row) => String(row.teamId) === String(team.teamId) && Number(row.round) === round)),
@@ -413,7 +431,7 @@ function loadRawGameState_(options = {}) {
     }),
     currentPairings,
     pairings: currentPairings,
-    roster: includeRosters ? roster.map((pet) => {
+    roster: includeRosters ? normalizedRoster.map((pet) => {
       const copy = Object.assign({}, pet);
       delete copy._rowNumber;
       return copy;
@@ -548,7 +566,7 @@ function loadPlayerGame_(session, payload) {
       waterParkEnabled: Boolean(team.waterParkEnabled),
       levelDistribution: levelDistribution_(teamRoster),
       cardLevelTotal: teamRoster.reduce((sum, pet) => sum + (Number(pet.level) || 1), 0),
-      publicRoster: teamRoster.map((pet) => ({ petName: pet.petName, level: Number(pet.level) || 1, gameRoundsDeployed: Number(pet.gameRoundsDeployed) || 0 })),
+      publicRoster: teamRoster.map((pet) => ({ petName: pet.petName, level: Number(pet.level) || 1, enable: rosterEnabled_(pet), gameRoundsDeployed: Number(pet.gameRoundsDeployed) || 0 })),
       ...(String(team.teamId) === String(session.teamId) ? { version: team.version, roster: teamRoster, currentLineups: teamLineups } : {}),
     });
     }),
@@ -624,7 +642,7 @@ function saveLineup_(teamId, payload) {
   const expectedSize = kinds[challengeIndex] === "duo" ? DUO_CONTRIBUTION_SIZE : SINGLE_TEAM_SIZE;
   if (payload.lineup.length !== expectedSize) throw apiError_("INVALID_LINEUP", "陣容格數錯誤", 400);
   const roster = table_(SHEETS.roster).filter((pet) => String(pet.teamId) === String(teamId));
-  const owned = new Set(roster.map((pet) => String(pet.petName)));
+  const owned = new Set(roster.filter(rosterDeployable_).map((pet) => String(pet.petName)));
   const selected = payload.lineup.filter(Boolean).map(String);
   if (selected.some((name) => !owned.has(name)) || new Set(selected).size !== selected.length) throw apiError_("INVALID_LINEUP", "陣容包含無效或重複角色", 400);
   const consumed = new Set(roster
@@ -679,7 +697,7 @@ function savePlayerLineups_(teamId, payload) {
   });
 
   const roster = table_(SHEETS.roster).filter((pet) => String(pet.teamId) === String(teamId));
-  const owned = new Set(roster.filter((pet) => (Number(pet.level) || 0) > 0).map((pet) => String(pet.petName)));
+  const owned = new Set(roster.filter(rosterDeployable_).map((pet) => String(pet.petName)));
   const consumed = new Set(roster.filter(isConsumedOncePet_).map((pet) => String(pet.petName)));
   const usedNames = new Set();
 
@@ -759,9 +777,9 @@ function drawRosters_(payload) {
       }
     }
     byName.forEach((value, name) => {
-      if (!value.row) newRows.push([String(team.teamId), name, value.level, 0, 1]);
+      if (!value.row) newRows.push([String(team.teamId), name, value.level, true, 0, 1]);
       else if (value.level !== (Number(value.row.level) || 1)) {
-        rosterSheet.getRange(value.row._rowNumber, 3, 1, 3).setValues([[value.level, Number(value.row.gameRoundsDeployed) || 0, (Number(value.row.version) || 1) + 1]]);
+        rosterSheet.getRange(value.row._rowNumber, 3, 1, 4).setValues([[value.level, rosterEnabled_(value.row), Number(value.row.gameRoundsDeployed) || 0, (Number(value.row.version) || 1) + 1]]);
       }
     });
   });
@@ -782,11 +800,11 @@ function setInitialRosters_(payload) {
     byName.forEach((pet, petName) => {
       existingWrites.push({
         rowNumber: pet._rowNumber,
-        values: [allPets.has(petName) ? 1 : 0, 0, (Number(pet.version) || 1) + 1],
+        values: [allPets.has(petName) ? 1 : 0, allPets.has(petName), 0, (Number(pet.version) || 1) + 1],
       });
     });
     INITIAL_ROUND_POOL_NAMES.forEach((petName) => {
-      if (!byName.has(petName)) newRows.push([String(team.teamId), petName, 1, 0, 1]);
+      if (!byName.has(petName)) newRows.push([String(team.teamId), petName, 1, true, 0, 1]);
     });
   });
 
@@ -795,7 +813,7 @@ function setInitialRosters_(payload) {
     const start = index;
     let end = index + 1;
     while (end < existingWrites.length && existingWrites[end].rowNumber === existingWrites[end - 1].rowNumber + 1) end += 1;
-    rosterSheet.getRange(existingWrites[start].rowNumber, 3, end - start, 3)
+    rosterSheet.getRange(existingWrites[start].rowNumber, 3, end - start, 4)
       .setValues(existingWrites.slice(start, end).map((write) => write.values));
     index = end;
   }
@@ -860,8 +878,9 @@ function updateRosterLevels_(payload) {
     const pet = byName.get(String(update.petName));
     const expectedVersion = pet ? (Number(pet.version) || 1) : 0;
     const level = Math.max(0, Math.min(MAX_LEVEL, Math.floor(Number(update.level) || 0)));
+    const enable = level > 0 ? update.enable !== false : false;
     if (Number(update.version) !== expectedVersion) throw apiError_("VERSION_CONFLICT", `角色「${update.petName}」已被更新`, 409);
-    if (level === 0 && usedNames.has(String(update.petName))) throw apiError_("ROSTER_IN_USE", `角色「${update.petName}」仍在本回合陣容中，不能鎖定`, 400);
+    if ((level === 0 || !enable) && usedNames.has(String(update.petName))) throw apiError_("ROSTER_IN_USE", `角色「${update.petName}」仍在本回合陣容中，不能鎖定或停用`, 400);
   });
   const rosterSheet = sheet_(SHEETS.roster);
   const newRows = [];
@@ -871,14 +890,15 @@ function updateRosterLevels_(payload) {
   updates.forEach((update) => {
     const pet = byName.get(String(update.petName));
     const level = Math.max(0, Math.min(MAX_LEVEL, Math.floor(Number(update.level) || 0)));
+    const enable = level > 0 ? update.enable !== false : false;
     if (!pet && level > 0) {
-      newRows.push([String(payload.teamId), String(update.petName), level, 0, 1]);
+      newRows.push([String(payload.teamId), String(update.petName), level, enable, 0, 1]);
       unlocked += 1;
     } else if (pet) {
       const previousLevel = Number(pet.level) || 0;
       existingWrites.push({
         rowNumber: pet._rowNumber,
-        values: [level, Number(pet.gameRoundsDeployed) || 0, (Number(pet.version) || 1) + 1],
+        values: [level, enable, Number(pet.gameRoundsDeployed) || 0, (Number(pet.version) || 1) + 1],
       });
       if (previousLevel <= 0 && level > 0) unlocked += 1;
       if (previousLevel > 0 && level <= 0) locked += 1;
@@ -889,7 +909,7 @@ function updateRosterLevels_(payload) {
     const start = index;
     let end = index + 1;
     while (end < existingWrites.length && existingWrites[end].rowNumber === existingWrites[end - 1].rowNumber + 1) end += 1;
-    rosterSheet.getRange(existingWrites[start].rowNumber, 3, end - start, 3)
+    rosterSheet.getRange(existingWrites[start].rowNumber, 3, end - start, 4)
       .setValues(existingWrites.slice(start, end).map((write) => write.values));
     index = end;
   }
@@ -938,6 +958,12 @@ function saveWorkerDrafts_(payload) {
       if (Number(update.version) !== expectedVersion) throw apiError_("VERSION_CONFLICT", `角色「${petName}」已被更新`, 409);
       finalLevels[petName] = Math.max(0, Math.min(MAX_LEVEL, Math.floor(Number(update.level) || 0)));
     });
+    const finalEnables = {};
+    rosterByName.forEach((pet, petName) => finalEnables[petName] = rosterDeployable_(pet));
+    rosterUpdates.forEach((update) => {
+      const petName = String(update.petName);
+      finalEnables[petName] = (Number(finalLevels[petName]) || 0) > 0 ? update.enable !== false : false;
+    });
 
     const kinds = roundKinds_(game.round);
     const finalLineupsByChallenge = {};
@@ -968,10 +994,10 @@ function saveWorkerDrafts_(payload) {
 
     rosterUpdates.forEach((update) => {
       const petName = String(update.petName);
-      if ((finalLevels[petName] || 0) <= 0 && usedNames.has(petName)) throw apiError_("ROSTER_IN_USE", `角色「${petName}」仍在本回合陣容中，不能鎖定`, 400);
+      if (((finalLevels[petName] || 0) <= 0 || finalEnables[petName] === false) && usedNames.has(petName)) throw apiError_("ROSTER_IN_USE", `角色「${petName}」仍在本回合陣容中，不能鎖定或停用`, 400);
     });
 
-    const owned = new Set(Object.keys(finalLevels).filter((petName) => (Number(finalLevels[petName]) || 0) > 0));
+    const owned = new Set(Object.keys(finalLevels).filter((petName) => (Number(finalLevels[petName]) || 0) > 0 && finalEnables[petName] !== false));
     const consumed = new Set((team.roster || []).filter(isConsumedOncePet_).map((pet) => String(pet.petName)));
     lineupUpdates.forEach((update) => {
       const challengeId = String(update.challengeId);
@@ -992,18 +1018,20 @@ function saveWorkerDrafts_(payload) {
       const petName = String(update.petName);
       const pet = rosterByName.get(petName);
       const level = Number(finalLevels[petName]) || 0;
+      const enable = level > 0 ? finalEnables[petName] !== false : false;
       if (!pet && level > 0) {
-        newRosterRows.push([teamId, petName, level, 0, 1]);
+        newRosterRows.push([teamId, petName, level, enable, 0, 1]);
         unlocked += 1;
         updatedPets += 1;
       } else if (pet) {
         const previousLevel = Number(pet.level) || 0;
         existingWrites.push({
           rowNumber: pet._rowNumber,
-          values: [level, Number(pet.gameRoundsDeployed) || 0, (Number(pet.version) || 1) + 1],
+          values: [level, enable, Number(pet.gameRoundsDeployed) || 0, (Number(pet.version) || 1) + 1],
         });
         if (previousLevel <= 0 && level > 0) unlocked += 1;
         if (previousLevel > 0 && level <= 0) locked += 1;
+        if (previousLevel === level && rosterEnabled_(pet) !== enable) updatedPets += 1;
         if (previousLevel !== level) updatedPets += 1;
       }
     });
@@ -1014,7 +1042,7 @@ function saveWorkerDrafts_(payload) {
     const start = index;
     let end = index + 1;
     while (end < existingWrites.length && existingWrites[end].rowNumber === existingWrites[end - 1].rowNumber + 1) end += 1;
-    rosterSheet.getRange(existingWrites[start].rowNumber, 3, end - start, 3)
+    rosterSheet.getRange(existingWrites[start].rowNumber, 3, end - start, 4)
       .setValues(existingWrites.slice(start, end).map((write) => write.values));
     index = end;
   }
@@ -1026,7 +1054,7 @@ function saveWorkerDrafts_(payload) {
 function autoConfigureAllLineups_(payload) {
   const game = loadRawGameState_();
   if (Number(payload.round) !== game.round || !Array.isArray(payload.lineups)) throw apiError_("VERSION_CONFLICT", "回合已變更，請重新載入", 409);
-  const rosterByTeam = new Map(game.teams.map((team) => [String(team.teamId), new Set(team.roster.map((pet) => String(pet.petName)))]));
+  const rosterByTeam = new Map(game.teams.map((team) => [String(team.teamId), new Set(team.roster.filter(rosterDeployable_).map((pet) => String(pet.petName)))]));
   const allRows = table_(SHEETS.lineups);
   const now = new Date().toISOString();
   const rows = [];
@@ -1070,7 +1098,7 @@ function saveOfficialRound_(payload) {
   game.teams.forEach((team) => {
     const deployed = new Set(team.currentLineups.map((row) => String(row.petName || "")).filter(Boolean));
     roster.filter((pet) => String(pet.teamId) === String(team.teamId) && deployed.has(String(pet.petName))).forEach((pet) => {
-      rosterSheet.getRange(pet._rowNumber, 3, 1, 3).setValues([[Number(pet.level) || 1, (Number(pet.gameRoundsDeployed) || 0) + 1, (Number(pet.version) || 1) + 1]]);
+      rosterSheet.getRange(pet._rowNumber, 3, 1, 4).setValues([[Number(pet.level) || 1, rosterEnabled_(pet), (Number(pet.gameRoundsDeployed) || 0) + 1, (Number(pet.version) || 1) + 1]]);
     });
   });
   const now = new Date().toISOString();
