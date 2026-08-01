@@ -194,7 +194,7 @@ function addArmor(target, amount, lineup, opposingLineup = []) {
   const atkGain = Math.floor(gained * (auraStats.atk + Number(target.special?.atkPerArmorGained ?? 0)));
   const hpGain = Math.floor(gained * auraStats.hp);
   target.atk += atkGain;
-  const hpDelta = gainHp(null, target, hpGain, opposingLineup);
+  const hpDelta = gainHp(null, target, hpGain, opposingLineup, { isAllyHealing: true });
   return { armor: gained, atk: atkGain, hp: hpDelta };
 }
 

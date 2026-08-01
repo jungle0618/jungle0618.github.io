@@ -282,6 +282,17 @@ describe("戰鬥效果", () => {
     expect(result.battleFrames[0].leftLineup.at(-1)).toMatchObject({ atk: 1, hp: 24, battleArmor: 1 });
   });
 
+  it("秦始皇不會受到犰狳護甲轉換的生命增加", () => {
+    const result = simulateBattle(
+      [buildNewPet({ name: "犰狳" }), unit("護甲來源", 5, 5, { roundShieldAllAhead: 1 }), buildNewPet({ name: "秦始皇" })],
+      [unit("敵人", 0, 100)]
+    );
+    const emperor = result.battleFrames[0].leftLineup.at(-1);
+
+    expect(emperor).toMatchObject({ hp: 3, maxHp: 3, battleArmor: 1 });
+    expect(result.battleFrames[0].events.some((event) => event.type === "round_ahead_shield" && event.target?.name === "秦始皇" && event.hpDelta > 0)).toBe(false);
+  });
+
   it("角色護甲上限為⌊7 × 1.2^(等級-1)⌋，超出的護甲不會觸發增益", () => {
     const result = simulateBattle(
       [unit("大量護甲來源", 0, 20, { roundFrontArmor: 20 }), buildNewPet({ name: "豪豬" })],
@@ -840,7 +851,7 @@ describe("Solo", () => {
     const lineupKeys = challenges.map((challenge) => (challenge.encounter.enemyIds ?? challenge.encounter.enemies?.map((enemy) => enemy.id)).join("|"));
     expect(SOLO_ENCOUNTERS).toHaveLength(14);
     expect(challenges).toHaveLength(14);
-    expect(new Set(lineupKeys).size).toBe(12);
+    expect(new Set(lineupKeys).size).toBe(14);
     const encounterSizes = SOLO_ENCOUNTERS.map((encounter) => (encounter.enemyIds ?? encounter.enemies ?? []).length);
     expect(encounterSizes).toEqual([1, 3, 2, 2, 3, 2, 3, 2, 1, 2, 3, 1, 1, 3]);
     expect(encounterSizes.filter((size) => size >= 3)).toHaveLength(5);
@@ -908,6 +919,15 @@ describe("Solo", () => {
         expect(challenge.encounter.enemyIds).not.toEqual(multiplayerChallenges[index].encounter.enemyIds);
       });
     }
+  });
+
+  it("第 10 回合單人關使用封攻長城", () => {
+    const [singleChallenge, duoChallenge] = getMultiplayerRoundChallenges(10);
+
+    expect(singleChallenge.kind).toBe("single");
+    expect(singleChallenge.encounter).toMatchObject({ name: "封攻長城", enemyIds: ["attack_sealer", "shell_guard"] });
+    expect(duoChallenge.kind).toBe("duo");
+    expect(duoChallenge.encounter).toMatchObject({ name: "霧沼三震", enemyIds: ["shadow_assassin"] });
   });
 
   it("保留原本 Demo 的 14 組不重複敵方陣容", () => {
