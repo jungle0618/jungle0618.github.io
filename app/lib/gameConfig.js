@@ -22,7 +22,7 @@ export const GAME_CONFIG = Object.freeze({
     [{ kind: "single", multiplayerEncounterRound: 6, demoEncounterRound: 6 }, { kind: "single", multiplayerEncounterRound: 5, demoEncounterRound: 5 }],
     [{ kind: "single", multiplayerEncounterRound: 12, demoEncounterRound: 12 }],
     [{ kind: "single", multiplayerEncounterRound: 11, demoEncounterRound: 11 }, { kind: "single", multiplayerEncounterRound: 13, demoEncounterRound: 13 }],
-    [{ kind: "single", multiplayerEncounterRound: 8, demoEncounterRound: 10 }, { kind: "duo", multiplayerEncounterRound: 9, demoEncounterRound: 14 }],
+    [{ kind: "single", multiplayerEncounterRound: 9, demoEncounterRound: 14 }, { kind: "duo", multiplayerEncounterRound: 8, demoEncounterRound: 10 }],
   ],
 });
 

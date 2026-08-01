@@ -921,13 +921,13 @@ describe("Solo", () => {
     }
   });
 
-  it("第 10 回合單人關使用封攻長城", () => {
+  it("第 10 回合交換單人關與雙人關配置", () => {
     const [singleChallenge, duoChallenge] = getMultiplayerRoundChallenges(10);
 
     expect(singleChallenge.kind).toBe("single");
-    expect(singleChallenge.encounter).toMatchObject({ name: "封攻長城", enemyIds: ["attack_sealer", "shell_guard"] });
+    expect(singleChallenge.encounter).toMatchObject({ name: "霧沼三震", enemyIds: ["shadow_assassin"] });
     expect(duoChallenge.kind).toBe("duo");
-    expect(duoChallenge.encounter).toMatchObject({ name: "霧沼三震", enemyIds: ["shadow_assassin"] });
+    expect(duoChallenge.encounter).toMatchObject({ name: "封攻長城", enemyIds: ["attack_sealer", "shell_guard"] });
   });
 
   it("保留原本 Demo 的 14 組不重複敵方陣容", () => {
