@@ -1222,11 +1222,11 @@ describe("Solo", () => {
     expect(events.some((event) => event.type === "round_self_growth")).toBe(false);
   });
 
-  it("電鰻每回合把玩家最前排攻擊變成 4", () => {
+  it("豆花每回合把玩家最前排攻擊變成 4", () => {
     const definition = ENEMY_DEFINITIONS.attack_sealer;
     const enemy = unit(definition.name, definition.atk, definition.hp, definition.special, { isEnemy: true });
     expect(enemy).toEqual(expect.objectContaining({
-      name: "電鰻",
+      name: "豆花",
       atk: 5,
       hp: 36,
       special: expect.objectContaining({ roundEnemyFrontAtkSet: 4 }),

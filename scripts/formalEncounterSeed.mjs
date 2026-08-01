@@ -6,7 +6,7 @@ export const FORMAL_ENCOUNTER_SEED = Object.freeze([
   { name: "爆羽火線", description: "開場傷害接上死亡爆破，逼迫隊伍處理傷害時序。", enemyIds: ["bombard_opener", "bombard_martyr", "swarm_boar"] },
   { name: "竹林風眼", description: "範圍攻擊藏在減傷守衛身後，必須突破保護或直取後排。", enemyIds: ["storm_archer", "bamboo_guard"] },
   { name: "深海替身", description: "後排刺客與最低生命追擊者，獅子以高攻擊力施壓。", enemyIds: ["endless_colossus", "royal_assassin", "forest_tyrant"] },
-  { name: "封攻長城", description: "電鰻封鎖前排攻擊，陸龜以護甲拖延戰鬥。", enemyIds: ["attack_sealer", "shell_guard"] },
+  { name: "封攻長城", description: "豆花封鎖前排攻擊，陸龜以護甲拖延戰鬥。", enemyIds: ["attack_sealer", "shell_guard"] },
   { name: "霧沼三震", description: "開戰三段全體傷害後進入奇數回合閃避節奏。", enemyIds: ["shadow_assassin"] },
   { name: "存活威壓", description: "猴子與水獺依序排列；猴子攻擊力與生命上限為 6 × 我方目前存活角色數，水獺為 5/40 白板。", enemyIds: ["worker_living_enemy_power", "worker_living_enemy_guard"] },
   { name: "爆羽鬥獸", description: "中央爆破會餵養兩側鬣狗，擊殺順序會改變戰局。", enemyIds: ["sweep_brute", "bombard_martyr", "sweep_brute"] },
